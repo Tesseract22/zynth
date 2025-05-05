@@ -7,7 +7,7 @@ ifdef OS
 	LD_FLAGS := -lmsvcrt -lwinmm -limm32 -lgdi32
 else
 	TARGET := key
-	LD_FLAGS := 
+	LD_FLAGS := -lm
 endif
 
 $(TARGET): main.c $(RAYLIB_DLL)
