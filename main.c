@@ -13,6 +13,10 @@ typedef struct {
     size_t head, tail, count;
     float data[RINGBUF_SIZE];
 } RingBuffer;
+typedef struct {
+    char key;
+    int note;
+} KeyNote;
 #define RingBuffer_At(rb, i) (rb).data[((rb).head + i) % (rb).count]
 void RingBuffer_Append(RingBuffer *rb, float el) {
     rb->tail = (rb->tail + 1) % RINGBUF_SIZE;
@@ -204,7 +208,7 @@ int main(int argc, char** argv)
     emscripten_set_main_loop(main_loop__em, 0, 1);
 #else
     int should_quit = 0;
-    int notes[] = {0, 2, 4, 5, 7, 9, 11, 12, 14, 16};
+    //int notes[] = {0, 2, 4, 5, 7, 9, 11, 12, 14, 16};
     int WINDOW_W = 1920;
     int WINDOW_H = 1080;
     InitWindow(WINDOW_W, WINDOW_H, "MIDI");
@@ -238,16 +242,41 @@ int main(int argc, char** argv)
 	    }
 	}
 	EndDrawing();
-	for (int key = 1; key <= 9; ++key) {
-	    WaveformEnvelop *envelop = &envelops[key - 1];
-	    ma_waveform *waveform = &waveforms_pool[key - 1];
-	    if (IsKeyPressed(KEY_ZERO + key)) {
-		sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, 0.2, 440 * exp2((double)notes[key - 1]/12));
+#define KN(k, n) (KeyNote) {.key = (k), .note = (n)}
+	KeyNote keynote_map[] = {
+	    KN(KEY_Q, 		0),
+	    KN(KEY_TWO, 	1),
+	    KN(KEY_W, 		2),
+	    KN(KEY_THREE,	3),
+	    KN(KEY_E,		4),
+	    KN(KEY_R,		5),
+	    KN(KEY_FIVE,	6),
+	    KN(KEY_T,		7),
+	    KN(KEY_SIX,		8),
+	    KN(KEY_Y,		9),
+	    KN(KEY_SEVEN,	10),
+	    KN(KEY_U,		11),
+	    KN(KEY_I,		12),
+	};
+	int keynote_map_len = sizeof(keynote_map)/sizeof(KeyNote);
+	for (int key = 0; key < keynote_map_len; ++key) {
+	    WaveformEnvelop *envelop = &envelops[key];
+	    ma_waveform *waveform = &waveforms_pool[key];
+	    KeyNote kn = keynote_map[key];
+	    if (IsKeyPressed(kn.key)) {
+		printf("pressed %i\n", kn.key);
+		sineWaveConfig = ma_waveform_config_init(
+			device.playback.format, 
+			device.playback.channels, 
+			device.sampleRate, 
+			ma_waveform_type_sine, 
+			0.2, 
+			261.63 * exp2((double)kn.note/12));
 		ma_waveform_init(&sineWaveConfig, waveform);
 		*envelop = init_envelop(0.05, 0.05, 0.25);
 		envelop->should_sustain = 1;
 	    }
-	    if (IsKeyReleased(KEY_ZERO + key)) {
+	    if (IsKeyReleased(kn.key)) {
 		envelop->should_sustain = 0;
 		envelop->sustain_end_t = fmax(waveform->time / waveform->config.frequency, envelop->decay);
 		//printf("key release %f\n", envelop->sustain_end_t);
