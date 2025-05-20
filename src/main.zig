@@ -1,6 +1,7 @@
 const std = @import("std");
 const c = @import("c.zig");
 const Waveform = @import("waveform.zig");
+const KeyBoard = @import("keyboard.zig");
 const DEVICE_FORMAT = c.ma_format_f32;
 const DEVICE_CHANNELS = 1;
 const DEVICE_SAMPLE_RATE = 48000;
@@ -10,13 +11,16 @@ const WAVEFORM_RECORD_GRANULARITY = 20;
 const Error = error {
     DeviceError,
 };
+
 const RINGBUF_SIZE = 500;
+
 pub const RingBuffer = struct {
     head: usize = 0,
     tail: usize = 0,
     count: usize = 0,
     data: [500]f32 = [_]f32{0} ** 500,
 };
+
 pub fn RingBuffer_Append(rb: *RingBuffer, el: f32) void {
     rb.tail = (rb.tail + 1) % RINGBUF_SIZE;
     if (rb.tail == rb.head) {
@@ -26,25 +30,23 @@ pub fn RingBuffer_Append(rb: *RingBuffer, el: f32) void {
     }
     rb.data[rb.tail] = el;
 }
+
 pub fn RingBuffer_At(rb: RingBuffer, i: usize) f32 {
     return rb.data[(rb.head + i) % rb.count];
 }
+
 var waveform_record = RingBuffer {};
+
 pub fn data_callback(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const anyopaque, frameCount: u32) callconv(.c) void
 {
     _ = pInput;
-
-    //printf("advance %f, time %f\n", pSineWave->advance, pSineWave->time);
-    // cycle_len = 2*pi/MA_TAU_D
-    const keyboard: [*]Waveform.KeyBoard = @alignCast(@ptrCast(pDevice[0].pUserData));
+    const keyboard: [*]KeyBoard = @alignCast(@ptrCast(pDevice[0].pUserData));
     const float_out: [*]f32 = @alignCast(@ptrCast(pOutput));
     std.debug.assert(4096 >= frameCount * DEVICE_CHANNELS);
     
-    for (0..2) |k| {
-	Waveform.keyboard_callback(&keyboard[k], float_out, frameCount);
+    for (0..4) |k| {
+	keyboard[k].read(float_out, frameCount);
     }
-
-
     var window_sum: f32 = 0;
     for (0..frameCount) |frame_i| {
 	window_sum += float_out[frame_i * DEVICE_CHANNELS]; // only cares about the first channel
@@ -53,12 +55,12 @@ pub fn data_callback(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*c
 	    window_sum = 0;
 	}
     }
-    // if (pDevice->pUserData) fwrite(float_out, 1, sizeof(float) * frameCount * DEVICE_CHANNELS, pDevice->pUserData);
-
 }
+
 pub fn main() !void {
+    const tone_count = @typeInfo(Waveform.Tone).@"enum".fields.len;
     var device: c.ma_device = undefined;
-    var keyboards: [2]Waveform.KeyBoard = undefined;
+    var keyboards: [tone_count]KeyBoard = undefined;
     var device_config = c.ma_device_config_init(c.ma_device_type_playback);
     device_config.playback.format   = DEVICE_FORMAT;
     device_config.playback.channels = DEVICE_CHANNELS;
@@ -79,9 +81,11 @@ pub fn main() !void {
 	return error.DeviceError;
     }
 
-    for (&keyboards) |*kb| {
-        kb.* = Waveform.keyboard_init(device);
+    for (&keyboards, 0..) |*kb, i| {
+        kb.* = KeyBoard.init(device);
+        kb.tone = @enumFromInt(i);
     }
+    var keyboard_i: u32 = 0;
     //const notes[] = {0, 2, 4, 5, 7, 9, 11, 12, 14, 16};
     const WINDOW_W = 1920;
     const WINDOW_H = 1080;
@@ -118,7 +122,8 @@ pub fn main() !void {
 	    }
 	}
 	c.EndDrawing();
-	Waveform.keyboard_listen_input(&keyboards[0], device);
+        if (c.IsKeyPressed(c.KEY_LEFT_ALT)) keyboard_i = (keyboard_i + 1) % @as(u32, @intCast(tone_count));
+	keyboards[keyboard_i].listen_input(device);
     }
     c.CloseWindow();
     c.ma_device_uninit(&device);
