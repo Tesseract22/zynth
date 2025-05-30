@@ -17,6 +17,27 @@ should_sustain: bool,
 pub const LiveSustain = struct {
     sustain_end_t: f32,
 };
+// |..|..|..|
+pub const Envelop2 = struct {
+    durations: []f32,
+    heights: []f32,
+    pub fn init(durations: []f32, heights: []f32) Envelop2 {
+        std.debug.assert(durations > 0);
+        std.debug.assert(durations.len == heights.len - 1);
+        return .{ .durations = durations, .heights = heights };
+    }
+    pub fn get(self: Envelop2, t: f32) f32 {
+        var accum: f32 = 0;
+        for (self.durations, 0..) |dura, i| {
+            if (t < accum + dura) {
+                return lerp(self.heights[i], self.heights[i+1], (t - accum)/dura);
+            }
+            accum += dura;
+        } else {
+            return 0;
+        }
+    }
+};
 pub const Envelop = struct {
     attack: f32,
     decay: f32,
@@ -41,6 +62,45 @@ pub const Envelop = struct {
             .release = release,
             .sustain = .{ .live_sustain =  .{.sustain_end_t = 0 } },
         };
+    }
+    pub fn get(envelop: Envelop, real_t: f32, should_sustain: bool) struct {f32, Status} {
+        var env_mul: f32 = undefined;
+        var status: Status = undefined;
+        if (real_t < envelop.attack) {
+            env_mul = lerp(0.0, 1.0, (real_t-0)/(envelop.attack-0));
+            status = Status.Attack; 
+        } else if (real_t < envelop.decay) {
+            env_mul = lerp(1.0, 0.6, (real_t-envelop.attack)/(envelop.decay-envelop.attack));
+            status = Status.Decay;
+        } else {
+            switch (envelop.sustain) {
+                .live_sustain => |sustain| {
+                    if (should_sustain) {
+                        env_mul = 0.6;
+                        status = Status.Sustain;
+                    } else if (real_t - sustain.sustain_end_t < envelop.release) {
+                        env_mul = lerp(0.6, 0.0, (real_t-sustain.sustain_end_t)/(envelop.release));
+                        status = Status.Release;
+                    } else {
+                        env_mul = 0;
+                        status = Status.Stop;
+                    }
+                },
+                .fixed_sustain => |sustain| {
+                    if (real_t < sustain) {
+                        env_mul = 0.6;
+                        status = Status.Sustain;
+                    } else if (real_t < envelop.release) {
+                        env_mul = lerp(0.6, 0.0, (sustain)/(envelop.release-sustain));
+                        status = Status.Release;
+                    } else {
+                        env_mul = 0;
+                        status = Status.Stop;
+                    }
+                }
+            }
+        }
+        return .{env_mul, status};
     }
 };
 
@@ -82,7 +142,7 @@ pub const Tone = enum {
     String,
 };
 
-pub fn ma_waveform__calculate_advance(sampleRate: u32, frequency: f64) f64 {
+pub fn calculate_advance(sampleRate: u32, frequency: f64) f64 {
     return (1.0 / (@as(f64, @floatFromInt(sampleRate)) / frequency));
 }
 
@@ -90,7 +150,7 @@ pub fn init(amp: f64, freq: f64, sample_rate: u32) Waveform {
     return .{
         .amplitude = amp,
         .frequency = freq,
-        .advance = ma_waveform__calculate_advance(sample_rate, freq),
+        .advance = calculate_advance(sample_rate, freq),
         .time    = 0,
         .should_sustain = true,
     };
@@ -98,6 +158,8 @@ pub fn init(amp: f64, freq: f64, sample_rate: u32) Waveform {
 
 var rand = std.Random.Xoshiro256.init(0);
 
+
+// A * sin(2*pi*f * t)
 pub fn sine_f32(time: f64, amplitude: f64) f32 {
     return @floatCast(@sin(2 * math.pi * time) * amplitude);
 }
@@ -135,45 +197,14 @@ pub fn read_waveform_pcm_frames(
     var status: Status = undefined;
 
     for (0..frameCount) |iFrame| {
-        var s = waveform_fn(waveform.time, waveform.amplitude);
-        waveform.time += waveform.advance;
+        const s = waveform_fn(waveform.time, waveform.amplitude);
         const real_t: f32 = @floatCast(waveform.time / waveform.frequency);
-        if (real_t < envelop.attack) {
-            s *= lerp(0.0, 1.0, (real_t-0)/(envelop.attack-0));
-            status = Status.Attack; } else if (real_t < envelop.decay) {
-            s *= lerp(1.0, 0.6, (real_t-envelop.attack)/(envelop.decay-envelop.attack));
-            status = Status.Decay;
-        } else {
-            switch (envelop.sustain) {
-                .live_sustain => |sustain| {
-                    if (waveform.should_sustain) {
-                        s *= 0.6;
-                        status = Status.Sustain;
-                    } else if (real_t - sustain.sustain_end_t < envelop.release) {
-                        s *= lerp(0.6, 0.0, (real_t-sustain.sustain_end_t)/(envelop.release));
-                        status = Status.Release;
-                    } else {
-                        s = 0;
-                        status = Status.Stop;
-                    }
-                },
-                .fixed_sustain => |sustain| {
-                    if (real_t < sustain) {
-                        s *= 0.6;
-                        status = Status.Sustain;
-                    } else if (real_t < envelop.release) {
-                        s *= lerp(0.6, 0.0, (sustain)/(envelop.release-sustain));
-                        status = Status.Release;
-                    } else {
-                        s = 0;
-                        status = Status.Stop;
-                    }
-                }
-            }
-        }
+        //waveform.time += waveform.advance;
+        const env_mul, status = envelop.get(real_t, waveform.should_sustain);
         for (0..DEVICE_CHANNELS) |iChannel| {
-            pFramesOutf32[iFrame*DEVICE_CHANNELS + iChannel] = s;
+            pFramesOutf32[iFrame*DEVICE_CHANNELS + iChannel] = s * env_mul;
         }
+        waveform.time += calculate_advance(DEVICE_SAMPLE_RATE, waveform.frequency);
     }
     // const real_t = waveform.time / waveform.frequency;
     return status;
