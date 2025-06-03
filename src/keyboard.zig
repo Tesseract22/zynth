@@ -82,11 +82,6 @@ pub fn listen_input(keyboard: *KeyBoard, device: c.ma_device) void{
     }
     if (c.IsKeyReleased(c.KEY_LEFT_SHIFT)) keyboard.octave += 1;
     if (c.IsKeyReleased(c.KEY_LEFT_CONTROL)) keyboard.octave -= 1;
-    // if (c.IsKeyReleased(c.KEY_LEFT_ALT)) {
-    //     const enum_len = @typeInfo(Tone).@"enum".fields.len;
-    //     const int_enum: u8 = @intFromEnum(keyboard.tone);
-    //     keyboard.tone = @enumFromInt((int_enum + 1) % enum_len);
-    // }
 }
 
 pub fn read(keyboard: *KeyBoard, float_out: [*c]f32, frameCount: u32) void {

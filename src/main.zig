@@ -1,10 +1,12 @@
 const std = @import("std");
 const c = @import("c.zig");
 const Waveform = @import("waveform.zig");
-const KeyBoard = @import("keyboard.zig");
-const DEVICE_FORMAT = c.ma_format_f32;
-const DEVICE_CHANNELS = 1;
-const DEVICE_SAMPLE_RATE = 48000;
+const Envelop = @import("envelop.zig");
+const Mixer = @import("mixer.zig");
+const RingBuffer = @import("ring_buffer.zig");
+// const KeyBoard = @import("keyboard.zig");
+const Config = @import("config.zig");
+const Streamer = @import("streamer.zig");
 
 const WAVEFORM_RECORD_GRANULARITY = 20;
 
@@ -14,59 +16,37 @@ const Error = error {
 
 const RINGBUF_SIZE = 500;
 
-pub const RingBuffer = struct {
-    head: usize = 0,
-    tail: usize = 0,
-    count: usize = 0,
-    data: [500]f32 = [_]f32{0} ** 500,
-};
-
-pub fn RingBuffer_Append(rb: *RingBuffer, el: f32) void {
-    rb.tail = (rb.tail + 1) % RINGBUF_SIZE;
-    if (rb.tail == rb.head) {
-	rb.head = (rb.head + 1) % RINGBUF_SIZE;
-    } else {
-	rb.count += 1;
-    }
-    rb.data[rb.tail] = el;
-}
-
-pub fn RingBuffer_At(rb: RingBuffer, i: usize) f32 {
-    return rb.data[(rb.head + i) % rb.count];
-}
-
-var waveform_record = RingBuffer {};
+var waveform_record = RingBuffer.FixedRingBuffer(f32, RINGBUF_SIZE) {};
 
 pub fn data_callback(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const anyopaque, frameCount: u32) callconv(.c) void
 {
     _ = pInput;
-    const keyboard: [*]KeyBoard = @alignCast(@ptrCast(pDevice[0].pUserData));
+    // const keyboard: [*]KeyBoard = @alignCast(@ptrCast(pDevice[0].pUserData));
+    const streamer: *Streamer = @alignCast(@ptrCast(pDevice[0].pUserData));
     const float_out: [*]f32 = @alignCast(@ptrCast(pOutput));
-    std.debug.assert(4096 >= frameCount * DEVICE_CHANNELS);
-    
-    for (0..4) |k| {
-	keyboard[k].read(float_out, frameCount);
-    }
+    _ = streamer.read(float_out[0..frameCount]);
     var window_sum: f32 = 0;
     for (0..frameCount) |frame_i| {
-	window_sum += float_out[frame_i * DEVICE_CHANNELS]; // only cares about the first channel
+	window_sum += float_out[frame_i * Config.CHANNELS]; // only cares about the first channel
 	if ((frame_i+1) % WAVEFORM_RECORD_GRANULARITY == 0) { // TODO: checks for unused frame at the end
-	    RingBuffer_Append(&waveform_record, window_sum/WAVEFORM_RECORD_GRANULARITY);
+	    waveform_record.push(window_sum/WAVEFORM_RECORD_GRANULARITY);
 	    window_sum = 0;
 	}
     }
 }
 
 pub fn main() !void {
-    const tone_count = @typeInfo(Waveform.Tone).@"enum".fields.len;
+    const alloc = std.heap.c_allocator;
     var device: c.ma_device = undefined;
-    var keyboards: [tone_count]KeyBoard = undefined;
+    // var keyboards: [tone_count]KeyBoard = undefined;
+    var mixer = Mixer {};
+    var streamer = mixer.streamer();
     var device_config = c.ma_device_config_init(c.ma_device_type_playback);
-    device_config.playback.format   = DEVICE_FORMAT;
-    device_config.playback.channels = DEVICE_CHANNELS;
-    device_config.sampleRate        = DEVICE_SAMPLE_RATE;
+    device_config.playback.format   = Config.DEVICE_FORMAT;
+    device_config.playback.channels = Config.CHANNELS;
+    device_config.sampleRate        = Config.SAMPLE_RATE;
     device_config.dataCallback      = data_callback;
-    device_config.pUserData         = &keyboards;
+    device_config.pUserData         = &streamer;
 
     if (c.ma_device_init(null, &device_config, &device) != c.MA_SUCCESS) {
 	std.log.err("Failed to open playback device.", .{});
@@ -81,28 +61,25 @@ pub fn main() !void {
 	return error.DeviceError;
     }
 
-    for (&keyboards, 0..) |*kb, i| {
-        kb.* = KeyBoard.init(device);
-        kb.tone = @enumFromInt(i);
-    }
-    var keyboard_i: u32 = 0;
     //const notes[] = {0, 2, 4, 5, 7, 9, 11, 12, 14, 16};
     const WINDOW_W = 1920;
     const WINDOW_H = 1080;
     c.InitWindow(WINDOW_W, WINDOW_H, "MIDI");
     c.SetTargetFPS(60);
-    // const bpm = 120;
-    // const t = 0;
-    // const count = 0;
-    // const octave = 0;
-    // const progression = [][3]u32 {
-    //     .{2, 5, 9},
-    //     .{7, 11, 14},
-    //     .{0, 4, 7},
-    //     .{0, 4, 7},
-    // };
+    const bpm = 120.0;
+    var t: f32 = 0;
+    var p: u32 = 0;
+    const progression = [_][3]u32 {
+        .{2, 5, 9},
+        .{7, 11, 14},
+        .{0, 4, 7},
+        .{0, 4, 7},
+    };
+    
     const rect_w: f32 = WINDOW_W/@as(f32, @floatFromInt(RINGBUF_SIZE));
-    std.log.err("rect_w: {}", .{rect_w});
+    // var waveform_ringbuffer = RingBuffer.FixedRingBuffer(Waveform, 32) {};
+    // var waveform = Waveform.init(1, 440, Config.SAMPLE_RATE);
+    // mixer.play(waveform.streamer());
     while (!c.WindowShouldClose()) {
         c.BeginDrawing();
 	{
@@ -110,8 +87,8 @@ pub fn main() !void {
 	    c.DrawLine(0, WINDOW_H/2, WINDOW_W, WINDOW_H/2, c.Color {.r = 0, .g = 0, .b = 0, .a = 0x7f});
 	    for (0..RINGBUF_SIZE-1) |i| {
                 const fi: f32 = @floatFromInt(i);
-		const amp1: f32 = RingBuffer_At(waveform_record, i);
-		const amp2: f32 = RingBuffer_At(waveform_record, i+1);
+		const amp1: f32 = waveform_record.at(@intCast(i));
+		const amp2: f32 = waveform_record.at(@intCast(i+1));
 		const h1: f32 = WINDOW_H/2 * amp1;
 		const h2: f32 = WINDOW_H/2 * amp2;
 		c.DrawLineV(
@@ -122,11 +99,23 @@ pub fn main() !void {
 	    }
 	}
 	c.EndDrawing();
-        if (c.IsKeyPressed(c.KEY_LEFT_ALT)) keyboard_i = (keyboard_i + 1) % @as(u32, @intCast(tone_count));
-	keyboards[keyboard_i].listen_input(device);
+        const dt = c.GetFrameTime();
+        if (t <= 0) {
+            for (0..3) |ci| {
+                const freq = @exp2(@as(f32, @floatFromInt(progression[p][ci])) / 12.0) * 440;
+                const waveform = try alloc.create(Waveform);
+                waveform.* = Waveform.init(0.3, freq, Config.SAMPLE_RATE);
+                const envelop = try alloc.create(Envelop.Envelop);
+                envelop.* = Envelop.Envelop.init(&.{0.02, 0.02, 1.0/bpm * 60 - 0.04, 0.02}, &.{0.0, 1.0, 0.6, 0.6, 0.0}, waveform.streamer());
+                // waveform_ringbuffer.push(Waveform.init(0.3, freq, Config.SAMPLE_RATE));
+                // const wave_streamer = waveform_ringbuffer.last().streamer();
+                mixer.play(envelop.streamer());
+            }
+            t += 1.0/bpm * 60.0 * 4;
+            p = (p + 1) % @as(u32, @intCast(progression.len));
+        }
+        t -= dt;
     }
     c.CloseWindow();
     c.ma_device_uninit(&device);
-
-
 }
