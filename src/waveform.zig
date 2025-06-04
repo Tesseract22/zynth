@@ -19,9 +19,14 @@ shape: Shape,
 
 fn read(ptr: *anyopaque, frames: []f32) Streamer.Status {
     const self: *Waveform = @alignCast(@ptrCast(ptr));
+    const func: *const fn (f64, f64) f32 = switch (self.shape) {
+        .Sine => sine_f32,
+        .Sawtooth => sawtooth_f32,
+        .Triangle => triangle_f32,
+    };
     for (0..frames.len) |i| {
         self.time += self.advance;
-        frames[i] = sine_f32(self.time, self.amplitude);
+        frames[i] = func(self.time, self.amplitude);
     }
     return Streamer.Status.Continue;
 }
@@ -39,13 +44,13 @@ pub fn calculate_advance(sampleRate: u32, frequency: f64) f64 {
     return (1.0 / (@as(f64, @floatFromInt(sampleRate)) / frequency));
 }
 
-pub fn init(amp: f64, freq: f64, sample_rate: u32) Waveform {
+pub fn init(amp: f64, freq: f64, sample_rate: u32, shape: Shape) Waveform {
     return .{
         .amplitude = amp,
         .frequency = freq,
         .advance = calculate_advance(sample_rate, freq),
         .time    = 0,
-        .shape = Shape.Sine,
+        .shape = shape,
     };
 }
 

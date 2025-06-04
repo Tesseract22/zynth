@@ -22,11 +22,12 @@ pub fn play(self: *Mixer, stream: Streamer) void {
 pub fn read(ptr: *anyopaque, float_out: []f32) Streamer.Status {
     const self: *Mixer = @alignCast(@ptrCast(ptr));
     var tmp = [_]f32 {0} ** 4096;
-    for (0..self.streams.count) |i| {
+    for (0..self.streams.data.len) |i| {
         if (!self.streams.active.isSet(@intCast(i))) continue;
-        const status = self.streams.at(@intCast(i)).read(tmp[0..float_out.len]);
+        const status = self.streams.data[i].read(tmp[0..float_out.len]);
         for (0..float_out.len) |frame_i|
             float_out[frame_i] += tmp[frame_i];
+        // _ = status;
         if (status == .Stop) self.streams.remove(@intCast(i));
     }
     return Streamer.Status.Continue;

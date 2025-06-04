@@ -1,5 +1,6 @@
+const Config = @import("config.zig");
 pub usingnamespace  @cImport({
-    @cInclude("raylib.h");
+    if (Config.GRAPHIC) @cInclude("raylib.h");
     @cInclude("external/miniaudio.h");
 });
 
