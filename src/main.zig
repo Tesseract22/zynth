@@ -54,9 +54,8 @@ fn play_progression(mixer: *Mixer, a: std.mem.Allocator, dt: f32) !void {
             waveform.* = Waveform.init(0.3, freq, Config.SAMPLE_RATE, .Triangle);
             const envelop = try a.create(Envelop.Envelop);
             envelop.* = Envelop.Envelop.init(&.{0.02, 0.02, 1.0/bpm * 60 - 0.04, 0.02}, &.{0.0, 1.0, 0.6, 0.6, 0.0}, waveform.streamer());
-            const delay = try a.create(Delay);
-
-            delay.* = Delay.initSample(envelop.streamer(), 1024, 1);
+            const delay = try a.create(Delay.Reverb);
+            delay.* = Delay.Reverb.initSample(envelop.streamer(), 1024, 0.9);
 
             mixer.play(delay.streamer());
         }
