@@ -2,6 +2,7 @@ const std = @import("std");
 const c = @import("c.zig");
 const Waveform = @import("waveform.zig");
 const Envelop = @import("envelop.zig");
+const Delay = @import("delay.zig");
 const Mixer = @import("mixer.zig");
 const RingBuffer = @import("ring_buffer.zig");
 // const KeyBoard = @import("keyboard.zig");
@@ -50,17 +51,14 @@ fn play_progression(mixer: *Mixer, a: std.mem.Allocator, dt: f32) !void {
         for (0..3) |ci| {
             const freq = @exp2(@as(f32, @floatFromInt(progression[p][ci])) / 12.0) * 440;
             const waveform = try a.create(Waveform);
-            waveform.* = Waveform.init(0.3, freq, Config.SAMPLE_RATE, .Sawtooth);
+            waveform.* = Waveform.init(0.3, freq, Config.SAMPLE_RATE, .Triangle);
             const envelop = try a.create(Envelop.Envelop);
             envelop.* = Envelop.Envelop.init(&.{0.02, 0.02, 1.0/bpm * 60 - 0.04, 0.02}, &.{0.0, 1.0, 0.6, 0.6, 0.0}, waveform.streamer());
+            const delay = try a.create(Delay);
 
-            const waveform2 = try a.create(Waveform);
-            waveform2.* = Waveform.init(0.3, freq, Config.SAMPLE_RATE, .Triangle);
-            const envelop2 = try a.create(Envelop.Envelop);
-            envelop2.* = Envelop.Envelop.init(&.{0.02, 0.02, 1.0/bpm * 60 - 0.04, 0.02}, &.{0.0, 1.0, 0.6, 0.6, 0.0}, waveform2.streamer());
+            delay.* = Delay.initSample(envelop.streamer(), 1024, 1);
 
-            mixer.play(envelop.streamer());
-            mixer.play(envelop2.streamer());
+            mixer.play(delay.streamer());
         }
         t += 1.0/bpm * 60.0 * 4;
         p = (p + 1) % @as(u32, @intCast(progression.len));

@@ -4,7 +4,7 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.resolveTargetQuery(.{});
     const opt = b.standardOptimizeOption(.{});
-
+    // const enable_graphic = b.option("graphic", "whether to enable the GUI w/ raylib") orelse false;
     const rl = b.dependency("raylib", .{});
 
     const exe = b.addExecutable(

@@ -25,18 +25,18 @@ pub const Envelop = struct {
             return .{ 0, .Stop };
         }
     }
-    fn read(ptr: *anyopaque, frames: []f32) Streamer.Status {
+    fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
         const self: *Envelop = @alignCast(@ptrCast(ptr));
-        const sub_status = self.sub_stream.read(frames);
+        const len, const sub_status = self.sub_stream.read(frames);
         const advance = 1.0/@as(comptime_float, @floatFromInt(Config.SAMPLE_RATE));
-        var status: Streamer.Status = undefined;
-        for (0..frames.len) |i| {
+        for (0..len) |i| {
             self.t += advance;
-            const mul, status = self.get(self.t);
+            const mul, const status = self.get(self.t);
             frames[i] *= mul;
+            if (status == .Stop) return .{ @intCast(i), .Stop };
+        } else {
+            return .{ len, sub_status };
         }
-        if (sub_status == .Stop) return .Stop;
-        return status;
     }
     pub fn streamer(self: *Envelop) Streamer {
         return .{

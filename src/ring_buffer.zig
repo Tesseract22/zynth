@@ -6,13 +6,17 @@ pub fn FixedRingBuffer(comptime T: type, comptime size: u32) type {
         active: std.StaticBitSet(size) = std.StaticBitSet(size).initEmpty(),
         head: u32 = 0,
         tail: u32 = 0,
+        count: u32 = 0,
         pub fn push(self: *Self, el: T) void {
+            if (self.count == size) {
+                self.head = (self.head + 1) % size;
+            } else {
+                self.count += 1;
+            }
             self.data[self.tail] = el;
             self.active.set(self.tail);
             self.tail = (self.tail + 1) % size;
-            if (self.tail == self.head) {
-                self.head = (self.head + 1) % size;
-            }
+            
         }
         pub fn remove(self: *Self, i: u32) void {
             self.active.unset(i);

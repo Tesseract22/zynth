@@ -17,7 +17,7 @@ amplitude: f64,
 frequency: f64,
 shape: Shape,
 
-fn read(ptr: *anyopaque, frames: []f32) Streamer.Status {
+fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
     const self: *Waveform = @alignCast(@ptrCast(ptr));
     const func: *const fn (f64, f64) f32 = switch (self.shape) {
         .Sine => sine_f32,
@@ -28,7 +28,7 @@ fn read(ptr: *anyopaque, frames: []f32) Streamer.Status {
         self.time += self.advance;
         frames[i] = func(self.time, self.amplitude);
     }
-    return Streamer.Status.Continue;
+    return .{ @intCast(frames.len), Streamer.Status.Continue };
 }
 
 pub fn streamer(self: *Waveform) Streamer {
