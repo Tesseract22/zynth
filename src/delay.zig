@@ -28,17 +28,16 @@ pub fn initSecs(sub_streamer: Streamer, delay_secs: f32, playback: f32) Delay {
 
 fn read(ptr: *anyopaque, out: []f32) struct { u32, Streamer.Status } {
     const self: *Delay = @alignCast(@ptrCast(ptr));
-    const len, const status = self.sub_streamer.read(out);
-    if (status == .Stop) return .{len, .Stop};
-    // std.log.debug("len {} {}", .{out.len, MAX_BUF_LEN});
-    for (0..out.len) |i| {
-        const tmp =if (i < len) out[i] else 0;
+    const sub_len, _ = self.sub_streamer.read(out);
+    const len = @min(out.len, MAX_BUF_LEN-self.rest);
+    for (0..len) |i| {
+        const tmp = out[i];
         if (self.buf.count == MAX_BUF_LEN) {
             out[i] += self.buf.at(0) * self.playback;
         }
         self.buf.push(tmp);
     }
-    if (status == .Stop) self.rest += @intCast(out.len);
+    self.rest += len - sub_len;
     if (self.rest >= MAX_BUF_LEN) return .{ @intCast(out.len), .Stop };
     return .{ @intCast(out.len), .Continue };
 }

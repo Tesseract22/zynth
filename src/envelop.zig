@@ -29,11 +29,14 @@ pub const Envelop = struct {
         const self: *Envelop = @alignCast(@ptrCast(ptr));
         const len, const sub_status = self.sub_stream.read(frames);
         const advance = 1.0/@as(comptime_float, @floatFromInt(Config.SAMPLE_RATE));
-        for (0..len) |i| {
+        for (0..frames.len) |i| {
             self.t += advance;
             const mul, const status = self.get(self.t);
             frames[i] *= mul;
-            if (status == .Stop) return .{ @intCast(i), .Stop };
+            if (status == .Stop) {
+                @memset(frames[i..], 0);
+                return .{ @intCast(i), .Stop };
+            }
         } else {
             return .{ len, sub_status };
         }
