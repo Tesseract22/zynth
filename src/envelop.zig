@@ -3,27 +3,37 @@ const c = @import("c.zig");
 const Streamer = @import("streamer.zig");
 const Config = @import("config.zig");
 const lerp = std.math.lerp;
-// |..|..|..|
+
+pub fn LinearEnvelop(comptime DuraT: type, comptime ValT: type) type{
+    return struct {
+        const Self = @This();
+        durations: []const DuraT,
+        heights: []const ValT,
+        pub fn init(durations: []const DuraT, heights: []const ValT) Self {
+            std.debug.assert(durations.len > 0);
+            std.debug.assert(durations.len == heights.len - 1);
+            return .{ .durations = durations, .heights = heights };
+        }
+        pub fn get(self: Self, t: DuraT) struct { ValT, Streamer.Status } {
+            var accum: DuraT = 0;
+            for (self.durations, 0..) |dura, i| {
+                if (t < accum + dura) {
+                    return .{ lerp(self.heights[i], self.heights[i+1], (t - accum)/dura), .Continue };
+                }
+                accum += dura;
+            } else {
+                return .{ 0, .Stop };
+            }
+        }
+    };
+}
+
 pub const Envelop = struct {
-    durations: []const f32,
-    heights: []const f32,
+    le: LinearEnvelop(f32, f32),
     t: f32,
     sub_stream: Streamer,
     pub fn init(durations: []const f32, heights: []const f32, sub_stream: Streamer) Envelop {
-        std.debug.assert(durations.len > 0);
-        std.debug.assert(durations.len == heights.len - 1);
-        return .{ .durations = durations, .heights = heights, .t = 0, .sub_stream = sub_stream };
-    }
-    pub fn get(self: Envelop, t: f32) struct { f32, Streamer.Status } {
-        var accum: f32 = 0;
-        for (self.durations, 0..) |dura, i| {
-            if (t < accum + dura) {
-                return .{ lerp(self.heights[i], self.heights[i+1], (t - accum)/dura), .Continue };
-            }
-            accum += dura;
-        } else {
-            return .{ 0, .Stop };
-        }
+        return .{ .le = LinearEnvelop(f32, f32).init(durations, heights), .t = 0, .sub_stream = sub_stream };
     }
     fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
         const self: *Envelop = @alignCast(@ptrCast(ptr));
@@ -31,7 +41,7 @@ pub const Envelop = struct {
         const advance = 1.0/@as(comptime_float, @floatFromInt(Config.SAMPLE_RATE));
         for (0..frames.len) |i| {
             self.t += advance;
-            const mul, const status = self.get(self.t);
+            const mul, const status = self.le.get(self.t);
             frames[i] *= mul;
             if (status == .Stop) {
                 @memset(frames[i..], 0);
@@ -95,5 +105,12 @@ pub const Status = enum {
     Release,
     Stop,
 };
+const testing = std.testing;
+test "Linear Envelop" {
+    const le = LinearEnvelop(f64, f64).init(&.{0.5}, &.{440, 440});
+    for (0..5) |i| {
+        try testing.expectEqualDeep(le.get(@as(f64, @floatFromInt(i)) * 0.1), .{ 440, .Continue });
+    }
 
-
+    try testing.expectEqualDeep(le.get(0.6), .{ 0, .Stop });
+}

@@ -39,6 +39,8 @@ pub fn data_callback(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*c
 }
 var t: f32 = 0;
 var p: u32 = 0;
+var rand = std.Random.Xoroshiro128.init(0);
+var random = rand.random();
 fn play_progression(mixer: *Mixer, a: std.mem.Allocator, dt: f32) !void {
     const bpm = 120.0;
     const progression = [_][3]u32 {
@@ -49,11 +51,20 @@ fn play_progression(mixer: *Mixer, a: std.mem.Allocator, dt: f32) !void {
     };
     if (t <= 0) {
         for (0..3) |ci| {
+            const whole_note = 1.0/bpm * 60;
             const freq = @exp2(@as(f32, @floatFromInt(progression[p][ci])) / 12.0) * 440;
-            const waveform = try a.create(Waveform);
-            waveform.* = Waveform.init(0.1, freq, Config.SAMPLE_RATE, .Triangle);
+            const waveform = try a.create(Waveform.FreqEnvelop);
+            waveform.* = Waveform.FreqEnvelop.init(0.1, 
+                .{
+                    .durations = try a.dupe(f64, &.{whole_note * 2}), 
+                    .heights = try a.dupe(f64, &.{freq, freq * 0.90})
+                }, 
+                    .Triangle);
             const envelop = try a.create(Envelop.Envelop);
-            envelop.* = Envelop.Envelop.init(&.{0.02, 0.02, 1.0/bpm * 60 - 0.04, 0.02}, &.{0.0, 1.0, 0.6, 0.6, 0.0}, waveform.streamer());
+            envelop.* = Envelop.Envelop.init(
+                try a.dupe(f32, &.{0.02, 0.02, whole_note, 0.02}), 
+                try a.dupe(f32, &.{0.0, 1.0, 0.6, 0.6, 0.0}), 
+                waveform.streamer());
             // const delay = try a.create(Delay.Reverb);
             // delay.* = Delay.Reverb.initRandomize(envelop.streamer(), 0.05, 0.3, 0.7);
 
@@ -72,6 +83,7 @@ pub fn main() !void {
     var device: c.ma_device = undefined;
     // var keyboards: [tone_count]KeyBoard = undefined;
     var mixer = Mixer {};
+    // var streamer = mixer.streamer();
     var reverb = Delay.Reverb.initRandomize(mixer.streamer(), 0.25, 1, 0.3);
     var streamer = reverb.streamer();
     var device_config = c.ma_device_config_init(c.ma_device_type_playback);
