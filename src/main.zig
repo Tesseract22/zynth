@@ -51,13 +51,13 @@ fn play_progression(mixer: *Mixer, a: std.mem.Allocator, dt: f32) !void {
         for (0..3) |ci| {
             const freq = @exp2(@as(f32, @floatFromInt(progression[p][ci])) / 12.0) * 440;
             const waveform = try a.create(Waveform);
-            waveform.* = Waveform.init(0.3, freq, Config.SAMPLE_RATE, .Triangle);
+            waveform.* = Waveform.init(0.1, freq, Config.SAMPLE_RATE, .Triangle);
             const envelop = try a.create(Envelop.Envelop);
             envelop.* = Envelop.Envelop.init(&.{0.02, 0.02, 1.0/bpm * 60 - 0.04, 0.02}, &.{0.0, 1.0, 0.6, 0.6, 0.0}, waveform.streamer());
-            const delay = try a.create(Delay.Reverb);
-            delay.* = Delay.Reverb.initSample(envelop.streamer(), 1024, 0.9);
+            // const delay = try a.create(Delay.Reverb);
+            // delay.* = Delay.Reverb.initRandomize(envelop.streamer(), 0.05, 0.3, 0.7);
 
-            mixer.play(delay.streamer());
+            mixer.play(envelop.streamer());
         }
         t += 1.0/bpm * 60.0 * 4;
         p = (p + 1) % @as(u32, @intCast(progression.len));
@@ -72,7 +72,8 @@ pub fn main() !void {
     var device: c.ma_device = undefined;
     // var keyboards: [tone_count]KeyBoard = undefined;
     var mixer = Mixer {};
-    var streamer = mixer.streamer();
+    var reverb = Delay.Reverb.initRandomize(mixer.streamer(), 0.25, 1, 0.3);
+    var streamer = reverb.streamer();
     var device_config = c.ma_device_config_init(c.ma_device_type_playback);
     device_config.playback.format   = Config.DEVICE_FORMAT;
     device_config.playback.channels = Config.CHANNELS;
