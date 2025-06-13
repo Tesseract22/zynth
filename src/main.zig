@@ -95,7 +95,7 @@ pub fn main() !void {
     if (Config.GRAPHIC) {
         const WINDOW_W = 1920;
         const WINDOW_H = 1080;
-        c.InitWindow(WINDOW_W, WINDOW_H, "MIDI");
+        c.InitWindow(WINDOW_W, WINDOW_H, "Zynth");
         c.SetTargetFPS(60);
         const rect_w: f32 = WINDOW_W/@as(f32, @floatFromInt(RINGBUF_SIZE));
         while (!c.WindowShouldClose()) {
