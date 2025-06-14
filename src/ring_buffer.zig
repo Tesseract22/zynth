@@ -8,10 +8,12 @@ pub fn FixedRingBuffer(comptime T: type, comptime size: u32) type {
         tail: u32 = 0,
         count: u32 = 0,
         len: u32 = size,
+
         pub fn init(len: u32) Self {
             std.debug.assert(len <= size and len != 0);
             return .{ .len = len };
         }
+
         pub fn push(self: *Self, el: T) void {
             if (self.count == self.len) {
                 self.head = (self.head + 1) % self.len;
@@ -23,17 +25,29 @@ pub fn FixedRingBuffer(comptime T: type, comptime size: u32) type {
             self.tail = (self.tail + 1) % self.len;
             
         }
+
         pub fn remove(self: *Self, i: u32) void {
             self.active.unset(i);
         }
+
         pub fn at(self: Self, i: u32) T {
             return self.data[(self.head + i) % self.len];
         }
+
         pub fn last(self: *Self) *T {
             return &self.data[self.tail];
         }
+
         pub fn is_full(self: Self) bool {
             return self.len == self.count;
+        }
+
+        pub fn clear(self: *Self, el: T) void {
+            self.head = 0;
+            self.tail = 0;
+            self.count = 0;
+            self.active = std.StaticBitSet(size).initEmpty();
+            @memset(&self.data, el);
         }
     };
 }

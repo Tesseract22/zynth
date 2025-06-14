@@ -68,11 +68,18 @@ pub const Simple = struct {
         return .{ @intCast(frames.len), Streamer.Status.Continue };
     }
 
+    fn reset(ptr: *anyopaque) bool {
+        const self: *Simple = @alignCast(@ptrCast(ptr));
+        self.time = 0;
+        return true;
+    }
+
     pub fn streamer(self: *Simple) Streamer {
         return .{
             .ptr = @ptrCast(self),
             .vtable = .{
                 .read = read,
+                .reset = reset,
             },
         };
     }
@@ -110,11 +117,19 @@ pub const FreqEnvelop = struct {
         }
     }
 
+    fn reset(ptr: *anyopaque) bool {
+        const self: *FreqEnvelop = @alignCast(@ptrCast(ptr));
+        self.time = 0;
+        self.wave_time = 0;
+        return true;
+    }
+
     pub fn streamer(self: *FreqEnvelop) Streamer {
         return .{
             .ptr = @ptrCast(self),
             .vtable = .{
                 .read = read,
+                .reset = reset,
             },
         };
     }
@@ -128,5 +143,33 @@ pub const FreqEnvelop = struct {
             .shape = shape,
         };
     }
+};
+
+pub const Noise = struct {
+    amp: f32,
+    random: std.Random,
+
+    pub fn streamer(self: *Noise) Streamer {
+        return .{
+            .ptr = @ptrCast(self),
+            .vtable = .{
+                .read = read,
+                .reset = reset,
+            },
+        };
+    }
+
+   fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
+        const self: *Noise = @alignCast(@ptrCast(ptr));
+        for (0..frames.len) |i| {
+            frames[i] = 2*(self.random.float(f32)-0.5) * self.amp;
+        }
+        return .{ @intCast(frames.len), .Continue };
+    }
+
+   fn reset(ptr: *anyopaque) bool { 
+       _ = ptr; 
+       return true;
+   }
 };
 

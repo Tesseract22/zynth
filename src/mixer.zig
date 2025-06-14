@@ -2,8 +2,6 @@ const std = @import("std");
 const Waveform = @import("waveform.zig");
 const Streamer = @import("streamer.zig");
 const RingBuffer = @import("ring_buffer.zig");
-const Tone = Waveform.Tone;
-const Envelop = Waveform.Envelop;
 const c = @import("c.zig");
 const Mixer = @This();
 pub const POOL_LEN = 32;
@@ -19,7 +17,7 @@ pub fn play(self: *Mixer, stream: Streamer) void {
     self.streams.push(stream);
 }
 
-pub fn read(ptr: *anyopaque, float_out: []f32) struct { u32, Streamer.Status } {
+fn read(ptr: *anyopaque, float_out: []f32) struct { u32, Streamer.Status } {
     const self: *Mixer = @alignCast(@ptrCast(ptr));
     var max_len: u32 = 0;
     for (0..self.streams.data.len) |i| {
@@ -34,11 +32,21 @@ pub fn read(ptr: *anyopaque, float_out: []f32) struct { u32, Streamer.Status } {
     return .{ max_len, Streamer.Status.Continue };
 }
 
+fn reset(ptr: *anyopaque) bool {
+    const self: *Mixer = @alignCast(@ptrCast(ptr));
+    var success = true;
+    for (&self.streams.data) |*stream| {
+        success = success and stream.reset();
+    }
+    return success;
+}
+
 pub fn streamer(self: *Mixer) Streamer {
     return .{
         .ptr = @ptrCast(self),
         .vtable = .{
             .read = read,
+            .reset = reset,
         }
     };
 }

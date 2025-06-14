@@ -100,11 +100,20 @@ pub const Reverb = struct {
         return .{ @intCast(out.len), .Continue };
     }
 
+    fn reset(ptr: *anyopaque) bool {
+        const self: *Reverb = @alignCast(@ptrCast(ptr));
+        for (&self.bufs) |*buf| {
+            buf.clear(0);
+        }
+        return self.sub_streamer.reset();
+    }
+
     pub fn streamer(self: *Reverb) Streamer {
         return .{
             .ptr = @ptrCast(self),
             .vtable = .{
                 .read = read,
+                .reset = reset,
             }
         };
     }

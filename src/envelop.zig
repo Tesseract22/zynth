@@ -56,9 +56,16 @@ pub const Envelop = struct {
             .ptr = @ptrCast(self),
             .vtable = .{
                 .read = read,
+                .reset = reset,
             },
         };
     }
+    fn reset(ptr: *anyopaque) bool {
+        const self: *Envelop = @alignCast(@ptrCast(ptr));
+        self.t = 0;
+        return self.sub_stream.reset();
+    }
+
 };
 
 pub const LiveEnvelop = struct {
