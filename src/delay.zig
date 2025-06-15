@@ -5,6 +5,52 @@ const RingBuffer =  @import("ring_buffer.zig");
 
 const MAX_BUF_LEN = Config.SAMPLE_RATE;
 const DelayBuf = RingBuffer.FixedRingBuffer(f32, MAX_BUF_LEN);
+pub const Wait = struct {
+    sub_streamer: Streamer,
+    samples: u32,
+
+    samples_elasped: u32 = 0,
+
+    pub fn init_sample(sub_streamer: Streamer, delay_sample: u32) Wait {
+        return Wait {
+            .sub_streamer = sub_streamer,
+            .samples = delay_sample,
+        };
+    }
+
+    pub fn init_secs(sub_streamer: Streamer, delay_secs: f32) Wait {
+        return init_sample(sub_streamer, @intFromFloat(delay_secs * Config.SAMPLE_RATE));
+    }
+
+    fn read(ptr: *anyopaque, out: []f32) struct { u32, Streamer.Status } {
+        const self: *Wait = @alignCast(@ptrCast(ptr));
+        const off = self.samples - self.samples_elasped;
+        self.samples_elasped += @min(off, out.len);
+        if (self.samples_elasped < self.samples) {
+            return .{ @intCast(out.len), .Continue };
+        }
+        const len, const status = self.sub_streamer.read(out[off..]);
+        return .{ len + off, status };
+    }
+    
+    fn reset(ptr: *anyopaque) bool {
+        const self: *Wait = @alignCast(@ptrCast(ptr));
+        self.samples_elasped = 0;
+        return true;
+    }
+
+    pub fn streamer(self: *Wait) Streamer {
+        return .{
+            .ptr = @ptrCast(self),
+            .vtable = .{
+                .read = read,
+                .reset = reset,
+            }
+        };
+    }
+
+
+};
 pub const Delay = struct {
     sub_streamer: Streamer,
     buf: DelayBuf,

@@ -27,7 +27,8 @@ fn read(ptr: *anyopaque, float_out: []f32) struct { u32, Streamer.Status } {
         for (0..len) |frame_i|
             float_out[frame_i] += tmp[frame_i];
         max_len = @max(max_len, len);
-        if (status == .Stop) self.streams.remove(@intCast(i));
+        _ = status;
+        // if (status == .Stop) self.streams.remove(@intCast(i));
     }
     return .{ max_len, Streamer.Status.Continue };
 }
@@ -35,8 +36,9 @@ fn read(ptr: *anyopaque, float_out: []f32) struct { u32, Streamer.Status } {
 fn reset(ptr: *anyopaque) bool {
     const self: *Mixer = @alignCast(@ptrCast(ptr));
     var success = true;
-    for (&self.streams.data) |*stream| {
-        success = success and stream.reset();
+    for (&self.streams.data, 0..) |*stream, i| {
+        if (!self.streams.active.isSet(@intCast(i))) continue;
+        success = stream.reset() and success;
     }
     return success;
 }

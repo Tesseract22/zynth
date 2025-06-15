@@ -13,6 +13,7 @@ pub const RingModulater = struct {
             .ptr = @ptrCast(self),
             .vtable = .{
                 .read = read,
+                .reset = reset,
             },
         };
     }
@@ -20,7 +21,7 @@ pub const RingModulater = struct {
         const self: *RingModulater = @alignCast(@ptrCast(ptr));
         var tmp = [_]f32 {0} ** 1024;
         std.debug.assert(tmp.len >= frames.len);
-        const len1, const status1 = self.carrier.read(&tmp);
+        const len1, const status1 = self.modulator.read(tmp[0..frames.len]);
         const len2, const status2 = self.carrier.read(frames);
         const min_len = @min(len1, len2);
         for (0..min_len) |i| {
@@ -30,6 +31,11 @@ pub const RingModulater = struct {
             frames[i] = 0;
         }
         return .{ min_len, status1.andStatus(status2) };
+    }
+
+    fn reset(ptr: *anyopaque) bool {
+        const self: *RingModulater = @alignCast(@ptrCast(ptr));
+        return self.carrier.reset() and self.modulator.reset();
     }
 };
 

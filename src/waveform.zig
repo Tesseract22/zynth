@@ -145,11 +145,41 @@ pub const FreqEnvelop = struct {
     }
 };
 
-pub const Noise = struct {
+pub const WhiteNoise = struct {
     amp: f32,
     random: std.Random,
 
-    pub fn streamer(self: *Noise) Streamer {
+    pub fn streamer(self: *WhiteNoise) Streamer {
+        return .{
+            .ptr = @ptrCast(self),
+            .vtable = .{
+                .read = read_impl,
+                .reset = reset,
+            },
+        };
+    }
+
+   fn read(self: *WhiteNoise, frames: []f32) struct { u32, Streamer.Status } {
+        for (0..frames.len) |i| {
+            frames[i] = 2*(self.random.float(f32)-0.5) * self.amp;
+        }
+        return .{ @intCast(frames.len), .Continue };
+    }
+   fn read_impl(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
+        const self: *WhiteNoise = @alignCast(@ptrCast(ptr));
+        return self.read(frames);
+    }
+
+   fn reset(ptr: *anyopaque) bool { 
+       _ = ptr; 
+       return true;
+   }
+};
+
+pub const BrownNoise = struct {
+    white: WhiteNoise,
+    rc: f32,
+    pub fn streamer(self: *BrownNoise) Streamer {
         return .{
             .ptr = @ptrCast(self),
             .vtable = .{
@@ -160,9 +190,14 @@ pub const Noise = struct {
     }
 
    fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
-        const self: *Noise = @alignCast(@ptrCast(ptr));
-        for (0..frames.len) |i| {
-            frames[i] = 2*(self.random.float(f32)-0.5) * self.amp;
+        const self: *BrownNoise = @alignCast(@ptrCast(ptr));
+        var tmp = [_]f32 {0} ** 4096;
+        _ = self.white.read(&tmp);
+        const dt: f32 = @as(f32, @floatFromInt(frames.len)) / Config.SAMPLE_RATE;
+        const a: f32 = dt / (self.rc + dt);
+        frames[0] = a * tmp[0];
+        for (1..frames.len) |i| {
+            frames[i] = a * tmp[i] + (1-a) * frames[i-1];
         }
         return .{ @intCast(frames.len), .Continue };
     }
