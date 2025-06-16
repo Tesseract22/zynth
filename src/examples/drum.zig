@@ -36,9 +36,13 @@ pub fn main() !void {
     }  
     {
         const loop = try a.create(Replay.Repeat);
-        loop.* = Replay.Repeat.init_secs(whole_note/4.0, null, try Preset.Drum.close_hi_hat(a));
+        loop.* = Replay.Repeat.init_secs(whole_note/2.0, null, try Preset.Drum.close_hi_hat(a));
 
-        mixer.play(loop.streamer());
+        const wait = try a.create(Delay.Wait);
+        wait.* = Delay.Wait.init_secs(loop.streamer(), whole_note/4.0);
+
+
+        mixer.play(wait.streamer());
     }
     {
         const loop = try a.create(Replay.Repeat);

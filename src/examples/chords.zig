@@ -7,10 +7,10 @@ const Mixer = Zynth.Mixer;
 const RingBuffer = Zynth.RingBuffer;
 const Audio = Zynth.Audio;
 const Config = Zynth.Config;
+const Replay = Zynth.Replay;
 const Streamer = Zynth.Streamer;
 
 fn data_callback(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const anyopaque, frameCount: u32) callconv(.c) void {
-    std.log.debug("callback", .{});
     Audio.read_frames(pDevice, pOutput, pInput, frameCount);
     const float_out: [*]f32 = @alignCast(@ptrCast(pOutput));
     var window_sum: f32 = 0;
@@ -26,12 +26,43 @@ fn data_callback(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const
 }
 var waveform_record = RingBuffer.FixedRingBuffer(f32, Config.WAVEFORM_RECORD_RINGBUF_SIZE) {};
 
-var t: f32 = 0;
-var p: u32 = 0;
 var rand = std.Random.Xoroshiro128.init(0);
 var random = rand.random();
-fn play_progression(mixer: *Mixer, a: std.mem.Allocator, dt: f32) !void {
-    const bpm = 120.0;
+
+const bpm = 160.0;
+const whole_note = 1.0/bpm * 60 * 4;
+fn play_progression(progression: []const [3]u32, mixer: *Mixer, a: std.mem.Allocator) !void {
+    
+ 
+    for (progression, 0..) |chord, ci| {
+        for (chord) |note| {
+            const freq = @exp2(@as(f32, @floatFromInt(note)) / 12.0) * 440;
+            const waveform = try a.create(Waveform.Simple);
+            waveform.* = Waveform.Simple.init(0.2, freq, .Triangle);
+            const envelop = try a.create(Envelop.Envelop);
+            envelop.* = Envelop.Envelop.init(
+                try a.dupe(f32, &.{0.02, 0.02, whole_note/2.0, 0.02}), 
+                try a.dupe(f32, &.{0.0, 1.0, 0.6, 0.6, 0.0}), 
+                waveform.streamer());
+            
+            const wait = try a.create(Zynth.Delay.Wait);
+            wait.* = Zynth.Delay.Wait.init_secs(envelop.streamer(), @as(f32, @floatFromInt(ci)) * whole_note);
+            mixer.play(wait.streamer());
+        }
+    }
+}
+pub fn main() !void {
+    const c_alloc = std.heap.c_allocator;
+    var arena = std.heap.ArenaAllocator.init(c_alloc);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    
+    const WINDOW_W = 1920;
+    const WINDOW_H = 1080;
+    c.InitWindow(WINDOW_W, WINDOW_H, "Zynth");
+    c.SetTargetFPS(60);
+    const rect_w: f32 = WINDOW_W/@as(f32, @floatFromInt(Config.WAVEFORM_RECORD_RINGBUF_SIZE));
     // const progression = [_][3]u32 {
     //     .{2, 5, 9},
     //     .{7, 11, 14},
@@ -44,50 +75,18 @@ fn play_progression(mixer: *Mixer, a: std.mem.Allocator, dt: f32) !void {
         .{0, 4, 9},
         .{0, 5, 14},
     };
- 
-    
-    if (t <= 0) {
-        const whole_note = 1.0/bpm * 60;
-        for (0..3) |ci| {
-            const freq = @exp2(@as(f32, @floatFromInt(progression[p][ci])) / 12.0) * 440;
-            const waveform = try a.create(Waveform.FreqEnvelop);
-            waveform.* = Waveform.FreqEnvelop.init(0.1, 
-                .{
-                    .durations = try a.dupe(f64, &.{whole_note * 2}), 
-                    .heights = try a.dupe(f64, &.{freq, freq * 1})
-                }, 
-                .Triangle);
-            const envelop = try a.create(Envelop.Envelop);
-            envelop.* = Envelop.Envelop.init(
-                try a.dupe(f32, &.{0.02, 0.02, whole_note, 0.02}), 
-                try a.dupe(f32, &.{0.0, 1.0, 0.6, 0.6, 0.0}), 
-                waveform.streamer());
-                        t += 1.0/bpm * 60.0;
-            mixer.play(envelop.streamer());
-        }
-        p = (p + 1) % @as(u32, @intCast(progression.len));
-    }
-    t -= dt;
-}
-pub fn main() !void {
-    const c_alloc = std.heap.c_allocator;
-    var arena = std.heap.ArenaAllocator.init(c_alloc);
-    defer arena.deinit();
-    const alloc = arena.allocator();
 
     var mixer = Mixer {};
-    // var streamer = mixer.streamer();
-    var reverb = Zynth.Delay.Reverb.initRandomize(mixer.streamer(), 0.25, 1, 0.3);
+    try play_progression(&progression, &mixer, alloc);
+    var loop = Replay.Repeat.init_secs(whole_note * 4, null, mixer.streamer()); // 4 bars
+    var reverb = Zynth.Delay.Reverb.initRandomize(loop.streamer(), 0.25, 1, 0.3);
     var streamer = reverb.streamer();
+
     var ctx = Audio.SimpleAudioCtx {};
     try ctx.init(&streamer);
     ctx.device.onData = data_callback;
     try ctx.start();
-    const WINDOW_W = 1920;
-    const WINDOW_H = 1080;
-    c.InitWindow(WINDOW_W, WINDOW_H, "Zynth");
-    c.SetTargetFPS(60);
-    const rect_w: f32 = WINDOW_W/@as(f32, @floatFromInt(Config.WAVEFORM_RECORD_RINGBUF_SIZE));
+
     while (!c.WindowShouldClose()) {
         c.BeginDrawing();
         {
@@ -107,8 +106,6 @@ pub fn main() !void {
             }
         }
         c.EndDrawing();
-        const dt = c.GetFrameTime();
-        try play_progression(&mixer, alloc, dt);
     }
     c.CloseWindow();
 }
