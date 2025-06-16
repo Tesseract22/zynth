@@ -36,7 +36,7 @@ pub const Wait = struct {
     fn reset(ptr: *anyopaque) bool {
         const self: *Wait = @alignCast(@ptrCast(ptr));
         self.samples_elasped = 0;
-        return true;
+        return self.sub_streamer.reset();
     }
 
     pub fn streamer(self: *Wait) Streamer {
