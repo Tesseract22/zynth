@@ -26,6 +26,8 @@ fn data_callback(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const
 }
 var waveform_record = RingBuffer.FixedRingBuffer(f32, Config.WAVEFORM_RECORD_RINGBUF_SIZE) {};
 
+const create = Audio.create;
+
 var rand = std.Random.Xoroshiro128.init(0);
 var random = rand.random();
 
@@ -37,16 +39,13 @@ fn play_progression(progression: []const [3]u32, mixer: *Mixer, a: std.mem.Alloc
     for (progression, 0..) |chord, ci| {
         for (chord) |note| {
             const freq = @exp2(@as(f32, @floatFromInt(note)) / 12.0) * 440;
-            const waveform = try a.create(Waveform.Simple);
-            waveform.* = Waveform.Simple.init(0.2, freq, .Triangle);
-            const envelop = try a.create(Envelop.Envelop);
-            envelop.* = Envelop.Envelop.init(
+            const waveform = create(a, Waveform.Simple.init(0.2, freq, .Triangle));
+            const envelop = create(a, Envelop.Envelop.init(
                 try a.dupe(f32, &.{0.02, 0.02, whole_note/2.0, 0.02}), 
                 try a.dupe(f32, &.{0.0, 1.0, 0.6, 0.6, 0.0}), 
-                waveform.streamer());
+                waveform.streamer()));
             
-            const wait = try a.create(Zynth.Delay.Wait);
-            wait.* = Zynth.Delay.Wait.init_secs(envelop.streamer(), @as(f32, @floatFromInt(ci)) * whole_note);
+            const wait = create(a, Zynth.Delay.Wait.init_secs(envelop.streamer(), @as(f32, @floatFromInt(ci)) * whole_note));
             mixer.play(wait.streamer());
         }
     }

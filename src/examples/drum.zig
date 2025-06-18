@@ -53,8 +53,5 @@ pub fn main() !void {
 
         mixer.play(wait.streamer());
     }
-    const stdin = std.io.getStdIn();
-    const reader = stdin.reader();
-    _ = try reader.readByte();
-
+    Audio.wait_for_input();
 }

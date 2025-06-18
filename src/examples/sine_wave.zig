@@ -12,8 +12,7 @@ pub fn main() !void {
     try ctx.init(&streamer);
     defer ctx.deinit();
     try ctx.start();
-    const stdin = std.io.getStdIn();
-    const reader = stdin.reader();
-    _ = try reader.readByte();
+
+    Audio.wait_for_input();
 }
 

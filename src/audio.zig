@@ -5,8 +5,19 @@ const std = @import("std");
 
 const AudioCallBack = fn (pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const anyopaque, frameCount: u32) callconv(.c) void;
 
-pub fn read_frames(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const anyopaque, frameCount: u32) callconv(.c) void
-{
+pub fn create(a: std.mem.Allocator, val: anytype) *@TypeOf(val) {
+    const res = a.create(@TypeOf(val)) catch unreachable;
+    res.* = val;
+    return res;
+}
+
+pub fn wait_for_input() void {
+    const stdin = std.io.getStdIn();
+    const reader = stdin.reader();
+    _ = reader.readByte() catch unreachable;
+}
+
+pub fn read_frames(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const anyopaque, frameCount: u32) callconv(.c) void {
     _ = pInput;
     const streamer: *Streamer = @alignCast(@ptrCast(pDevice[0].pUserData));
     const float_out: [*]f32 = @alignCast(@ptrCast(pOutput));
