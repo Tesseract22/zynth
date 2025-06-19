@@ -1,109 +1,118 @@
 const std = @import("std");
-const Waveform = @import("waveform.zig");
-const Tone = Waveform.Tone;
-const Envelop = Waveform.Envelop;
+const assert = std.debug.assert;
 const c = @import("c.zig");
+
+const Waveform = @import("waveform.zig");
+const Streamer = @import("streamer.zig");
+const Envelop = Waveform.Envelop;
 const KeyBoard = @This();
 pub const WAVEFORM_POOL_LEN = 32;
 
-keys: [WAVEFORM_POOL_LEN]Key,
-octave: i32,
-tone: Waveform.Tone,
-
-
-pub const Key = struct {
-    waveform: Waveform,
-    state: KeyState,
-    pub const KeyState = union(enum) {
-        envelop: Waveform.Envelop,
-        string: Waveform.StringNoise,
-    };
+// Design 1.
+// A keyboard maps a set of keys to a set of streamer
+// When key is pressed, it start reading from the corresponding streamer
+// When kay is released, it calls the 'stop' method of the streamer
+//
+const Key = c_int; // A key, as in a key on the keyboard
+pub const default_regular_key_sequence: []const Key = &.{
+        c.KEY_Q, 	
+	c.KEY_W, 	
+	c.KEY_E,	
+	c.KEY_R,	
+	c.KEY_T,	
+	c.KEY_Y,	
+	c.KEY_U,	
+	c.KEY_I,	
+	c.KEY_O,    	
+	c.KEY_P,	
 };
-    
-pub const KeyNote = struct {
-    key: u8,
-    note: i32,
+pub const default_piano_key_sequence: []const Key = &.{
+        c.KEY_Q, 	
+	c.KEY_TWO, 	
+	c.KEY_W, 	
+	c.KEY_THREE,	
+	c.KEY_E,	
+	c.KEY_R,	
+	c.KEY_FIVE,	
+	c.KEY_T,	
+	c.KEY_SIX,	
+	c.KEY_Y,	
+	c.KEY_SEVEN,	
+	c.KEY_U,	
+	c.KEY_I,	
+	c.KEY_NINE,	
+	c.KEY_O,    	
+	c.KEY_ZERO,	
+	c.KEY_P,	
 };
 
-pub fn init(device: c.ma_device) KeyBoard {
-    var kb = KeyBoard { .keys = undefined, .octave = 0, .tone = Tone.Sine };
-    for (&kb.keys) |*key| {
-	key.waveform = Waveform.init(0, 220, device.sampleRate);
-    } 
-    return kb;
+keys: []const Key,
+streamers: []const Streamer,
+playing: std.DynamicBitSetUnmanaged,
+
+       
+pub fn init(keys: []const Key, streamers: []const Streamer, a: std.mem.Allocator) KeyBoard {
+    assert(keys.len == streamers.len);
+    return .{ .keys = keys, .streamers = streamers, .playing = std.DynamicBitSetUnmanaged.initEmpty(a, keys.len) catch unreachable };
 }
 
-pub fn listen_input(keyboard: *KeyBoard, device: c.ma_device) void{
-    const keynote_map = [_]KeyNote {
-	.{ .key = c.KEY_Q, 	.note = 0},
-	.{ .key = c.KEY_TWO, 	.note = 1},
-	.{ .key = c.KEY_W, 	.note = 2},
-	.{ .key = c.KEY_THREE,	.note = 3},
-	.{ .key = c.KEY_E,	.note = 4},
-	.{ .key = c.KEY_R,	.note = 5},
-	.{ .key = c.KEY_FIVE,	.note = 6},
-	.{ .key = c.KEY_T,	.note = 7},
-	.{ .key = c.KEY_SIX,	.note = 8},
-	.{ .key = c.KEY_Y,	.note = 9},
-	.{ .key = c.KEY_SEVEN,	.note = 10},
-	.{ .key = c.KEY_U,	.note = 11},
-	.{ .key = c.KEY_I,	.note = 12},
-	.{ .key = c.KEY_NINE,	.note = 13},
-	.{ .key = c.KEY_O,    	.note = 14},
-	.{ .key = c.KEY_ZERO,	.note = 15},
-	.{ .key = c.KEY_P,	.note = 16},
-    };
-    for (0..keynote_map.len) |key| {
-	const waveform = &keyboard.keys[key].waveform;
-	const kn = keynote_map[key];
-
-	const freq: f32 = @floatCast(261.63 * @exp2(@as(f64, @floatFromInt(kn.note))/12 + @as(f64, @floatFromInt(keyboard.octave))));
-	if (c.IsKeyPressed(kn.key)) {
-	    waveform.* = Waveform.init(0.2, freq, device.sampleRate);
-	    switch (keyboard.tone) {
-		Tone.Sine, Tone.Triangle, Tone.Sawtooth => keyboard.keys[key].state = .{ .envelop = Envelop.init_live(0.05, 0.05, 0.10) },
-		Tone.String => keyboard.keys[key].state = .{ .string = Waveform.StringNoise.init(freq) },
-	    }
-	}
-	if (c.IsKeyReleased(kn.key)) {
-	    waveform.should_sustain = false;
-	    //printf("key release %f\n", envelop.sustain_end_t);
-	    switch (keyboard.tone) {
-		Tone.Sine,
-		Tone.Triangle,
-		Tone.Sawtooth => {
-                    const envelop = &keyboard.keys[key].state.envelop;
-                    envelop.sustain.live_sustain.sustain_end_t = @max(@as(f32, @floatCast(waveform.time)) / freq, envelop.decay);
-
-                },
-		Tone.String => {},
-	    }
-	}
-    }
-    if (c.IsKeyReleased(c.KEY_LEFT_SHIFT)) keyboard.octave += 1;
-    if (c.IsKeyReleased(c.KEY_LEFT_CONTROL)) keyboard.octave -= 1;
+pub fn init_default_piano_keys(streamers: []const Streamer, a: std.mem.Allocator) KeyBoard {
+    assert(streamers.len <= default_piano_key_sequence.len);
+    return  init(default_piano_key_sequence[0..streamers.len], streamers, a);
 }
 
-pub fn read(keyboard: *KeyBoard, float_out: [*c]f32, frameCount: u32) void {
-    var tmp = [_]f32 {0} ** 4096;
-    std.debug.assert(4096 >= frameCount * Waveform.DEVICE_CHANNELS);
-    for (0..WAVEFORM_POOL_LEN) |i| {
-	const waveform = &keyboard.keys[i].waveform;
-	if (waveform.amplitude <= 0) {
-	    continue;
-	}
-	const status = switch (keyboard.tone) {
-	    Tone.Sine =>      waveform.read_waveform_pcm_frames(keyboard.keys[i].state.envelop, &tmp, frameCount, Waveform.sine_f32),
-	    Tone.Triangle =>  waveform.read_waveform_pcm_frames(keyboard.keys[i].state.envelop, &tmp, frameCount, Waveform.triangle_f32),
-	    Tone.Sawtooth =>  waveform.read_waveform_pcm_frames(keyboard.keys[i].state.envelop, &tmp, frameCount, Waveform.sawtooth_f32),
-	    Tone.String =>    waveform.read_string_pcm_frames(&keyboard.keys[i].state.string,    &tmp, frameCount),
-	};
-	for (0..frameCount * Waveform.DEVICE_CHANNELS) |frame_i| {
-	    float_out[frame_i] += tmp[frame_i];
-	}
-	if (status == Waveform.Status.Stop) {
-	    waveform.amplitude = 0;
-	}
+pub fn init_default_regular_keys(streamers: []const Streamer, a: std.mem.Allocator) KeyBoard {
+    assert(streamers.len <= default_regular_key_sequence.len);
+    return init(default_regular_key_sequence[0..streamers.len], streamers, a);
+}
 
+pub fn listen_input(keyboard: *KeyBoard) void {
+    for (keyboard.keys, keyboard.streamers, 0..) |key, stream, i| {
+        if (c.IsKeyPressed(key)) {
+            _ = stream.reset();
+            keyboard.playing.set(i);
+        }
+        if (c.IsKeyReleased(key)) {
+            if (!stream.stop()) {
+                keyboard.playing.unset(i);
+            }
+        }
     }
+}
+
+fn read(ptr: *anyopaque, float_out: []f32) struct { u32, Streamer.Status } {
+    const self: *KeyBoard = @alignCast(@ptrCast(ptr));
+    var max_len: u32 = 0;
+    for (self.streamers, 0..) |stream, i| {
+        var tmp = [_]f32 {0} ** 1024; // TODO: smaller buf size
+        if (!self.playing.isSet(i)) continue;
+        const len, const status = stream.read(tmp[0..float_out.len]);
+        for (0..len) |frame_i|
+            float_out[frame_i] += tmp[frame_i];
+        max_len = @max(max_len, len);
+        if (status == .Stop) {
+            self.playing.unset(i);
+        }
+    }
+    return .{ max_len, Streamer.Status.Continue };
+}
+
+fn reset(ptr: *anyopaque) bool {
+    const self: *KeyBoard = @alignCast(@ptrCast(ptr));
+    var success = true;
+    for (self.streamers, 0..) |stream, i| {
+        if (!self.playing.isSet(@intCast(i))) continue;
+        success = stream.reset() and success;
+    }
+    return success;
+}
+
+pub fn streamer(self: *KeyBoard) Streamer {
+    return .{
+        .ptr = @ptrCast(self),
+        .vtable = .{
+            .read = read,
+            .reset = reset,
+        }
+    };
 }

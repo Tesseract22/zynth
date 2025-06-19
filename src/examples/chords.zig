@@ -34,8 +34,6 @@ var random = rand.random();
 const bpm = 160.0;
 const whole_note = 1.0/bpm * 60 * 4;
 fn play_progression(progression: []const [3]u32, mixer: *Mixer, a: std.mem.Allocator) !void {
-    
- 
     for (progression, 0..) |chord, ci| {
         for (chord) |note| {
             const freq = @exp2(@as(f32, @floatFromInt(note)) / 12.0) * 440;
@@ -55,11 +53,10 @@ pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(c_alloc);
     defer arena.deinit();
     const alloc = arena.allocator();
-
     
     const WINDOW_W = 1920;
     const WINDOW_H = 1080;
-    c.InitWindow(WINDOW_W, WINDOW_H, "Zynth");
+    c.InitWindow(WINDOW_W, WINDOW_H, "Zynth - Chords");
     c.SetTargetFPS(60);
     const rect_w: f32 = WINDOW_W/@as(f32, @floatFromInt(Config.WAVEFORM_RECORD_RINGBUF_SIZE));
     // const progression = [_][3]u32 {
@@ -85,6 +82,7 @@ pub fn main() !void {
     try ctx.init(&streamer);
     ctx.device.onData = data_callback;
     try ctx.start();
+    defer ctx.deinit();
 
     while (!c.WindowShouldClose()) {
         c.BeginDrawing();

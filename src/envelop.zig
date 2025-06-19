@@ -69,49 +69,86 @@ pub const Envelop = struct {
 };
 
 pub const LiveEnvelop = struct {
-    attack: f32,
-    decay: f32,
-    release: f32,
-    sustain_end_t: f32,
-    should_sustain: bool,
-    pub fn init(attack: f32, decay: f32, release: f32) LiveEnvelop {
+    attack: f64,
+    decay: f64,
+    release: f64,
+
+    t: f64 = 0,
+    should_sustain: bool = true,
+    sustain_end_t: f64 = undefined,
+    
+    sub_stream: Streamer,
+    pub fn init(attack: f32, decay: f32, release: f32, sub_stream: Streamer) LiveEnvelop {
         return .{
             .attack = attack,
-            .decay = decay,
+            .decay = attack + decay,
             .release = release,
-            .sustain_end_t = undefined,
+            .sub_stream = sub_stream,
         };
     }
-    pub fn get(self: LiveEnvelop, t: f32) struct {f32, Status} {
-        var env_mul: f32 = undefined;
-        var status: Status = undefined;
+
+    pub fn get(self: LiveEnvelop, t: f64) struct { f64, Streamer.Status } {
+        var env_mul: f64 = undefined;
+        var status: Streamer.Status = .Continue;
         if (t < self.attack) {
             env_mul = lerp(0.0, 1.0, (t-0)/(self.attack-0));
-            status = Status.Attack; 
         } else if (t < self.decay) {
             env_mul = lerp(1.0, 0.6, (t-self.attack)/(self.decay-self.attack));
-            status = Status.Decay;
         } else if (self.should_sustain) {
             env_mul = 0.6;
-            status = Status.Sustain;
         } else if (t - self.sustain_end_t < self.release) {
             env_mul = lerp(0.6, 0.0, (t-self.sustain_end_t)/(self.release));
-            status = Status.Release;
         } else {
             env_mul = 0;
-            status = Status.Stop;
+            status = .Stop;
         }
         return .{env_mul, status};
     }
+
+    fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
+        const self: *LiveEnvelop = @alignCast(@ptrCast(ptr));
+        const len, const sub_status = self.sub_stream.read(frames);
+        const advance = 1.0/@as(comptime_float, @floatFromInt(Config.SAMPLE_RATE));
+        for (0..frames.len) |i| {
+            self.t += advance;
+            const mul, const status = self.get(self.t);
+            frames[i] *= @floatCast(mul);
+            if (status == .Stop) {
+                @memset(frames[i..], 0);
+                return .{ @intCast(i), .Stop };
+            }
+        } else {
+            return .{ len, sub_status };
+        }
+    }
+
+    fn reset(ptr: *anyopaque) bool {
+        const self: *LiveEnvelop = @alignCast(@ptrCast(ptr));
+        self.t = 0;
+        self.should_sustain = true;
+        self.sustain_end_t = 0;
+        return self.sub_stream.reset();
+    }
+
+    fn stop(ptr: *anyopaque) bool {
+        const self: *LiveEnvelop = @alignCast(@ptrCast(ptr));
+        self.should_sustain = false;
+        self.sustain_end_t = @max(self.decay, self.t);
+        return true;
+    }
+
+    pub fn streamer(self: *LiveEnvelop) Streamer {
+        return .{
+            .ptr = @ptrCast(self),
+            .vtable = .{
+                .read = read,
+                .reset = reset,
+                .stop = stop,
+            },
+        };
+    }
 };
 
-pub const Status = enum {
-    Attack,
-    Decay,
-    Sustain,
-    Release,
-    Stop,
-};
 const testing = std.testing;
 test "Linear Envelop" {
     const le = LinearEnvelop(f64, f64).init(&.{0.5}, &.{440, 440});
