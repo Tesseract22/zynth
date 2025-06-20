@@ -17,6 +17,7 @@ pub const RingModulater = struct {
             },
         };
     }
+
     fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
         const self: *RingModulater = @alignCast(@ptrCast(ptr));
         var tmp = [_]f32 {0} ** 1024;
@@ -38,4 +39,3 @@ pub const RingModulater = struct {
         return self.carrier.reset() and self.modulator.reset();
     }
 };
-

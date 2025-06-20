@@ -1,8 +1,10 @@
 const std = @import("std");
+const c = @import("c.zig");
+
 const Waveform = @import("waveform.zig");
 const Streamer = @import("streamer.zig");
 const RingBuffer = @import("ring_buffer.zig");
-const c = @import("c.zig");
+
 const Mixer = @This();
 pub const POOL_LEN = 32;
 

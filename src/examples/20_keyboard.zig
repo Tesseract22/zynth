@@ -1,6 +1,7 @@
 const std = @import("std");
+
 const Zynth = @import("zynth");
-const c = Zynth.c;
+const c = Zynth.capi;
 const Waveform = Zynth.Waveform;
 const Envelop = Zynth.Envelop;
 const KeyBoard = Zynth.KeyBoard;

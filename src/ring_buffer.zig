@@ -1,4 +1,5 @@
 const std = @import("std");
+
 pub fn FixedRingBuffer(comptime T: type, comptime size: u32) type {
     return struct {
         const Self = @This();

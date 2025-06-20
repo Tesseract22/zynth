@@ -1,11 +1,11 @@
 const std = @import("std");
+const math = std.math;
 const c = @import("c.zig");
 
 const Streamer = @import("streamer.zig");
 const Envelop = @import("envelop.zig");
 const Config = @import("config.zig");
 const Waveform = @This();
-const math = std.math;
 
 pub const Shape = enum {
     Sine,

@@ -5,21 +5,22 @@ const RingBuffer =  @import("ring_buffer.zig");
 
 const MAX_BUF_LEN = Config.SAMPLE_RATE;
 const DelayBuf = RingBuffer.FixedRingBuffer(f32, MAX_BUF_LEN);
+
 pub const Wait = struct {
     sub_streamer: Streamer,
     samples: u32,
 
     samples_elasped: u32 = 0,
 
-    pub fn init_sample(sub_streamer: Streamer, delay_sample: u32) Wait {
+    pub fn init_samples(delay_sample: u32, sub_streamer: Streamer) Wait {
         return Wait {
             .sub_streamer = sub_streamer,
             .samples = delay_sample,
         };
     }
 
-    pub fn init_secs(sub_streamer: Streamer, delay_secs: f32) Wait {
-        return init_sample(sub_streamer, @intFromFloat(delay_secs * Config.SAMPLE_RATE));
+    pub fn init_secs(delay_secs: f32, sub_streamer: Streamer) Wait {
+        return init_samples(@intFromFloat(delay_secs * Config.SAMPLE_RATE), sub_streamer);
     }
 
     fn read(ptr: *anyopaque, out: []f32) struct { u32, Streamer.Status } {
@@ -48,15 +49,15 @@ pub const Wait = struct {
             }
         };
     }
-
-
 };
+
 pub const Delay = struct {
     sub_streamer: Streamer,
     buf: DelayBuf,
     playback: f32,
     rest: u32,
-    pub fn initSample(sub_streamer: Streamer, delay_sample: u32, playback: f32) Delay {
+
+    pub fn init_samples(delay_sample: u32, playback: f32, sub_streamer: Streamer) Delay {
         return Delay {
             .sub_streamer = sub_streamer,
             .buf = DelayBuf.init(delay_sample),
@@ -65,8 +66,8 @@ pub const Delay = struct {
         };
     }
 
-    pub fn initSecs(sub_streamer: Streamer, delay_secs: f32, playback: f32) Delay {
-        return initSample(sub_streamer, delay_secs / Config.SAMPLE_RATE, playback);
+    pub fn init_secs(delay_secs: f32, playback: f32, sub_streamer: Streamer) Delay {
+        return init_samples(delay_secs / Config.SAMPLE_RATE, playback, sub_streamer);
     }
 
     fn read(ptr: *anyopaque, out: []f32) struct { u32, Streamer.Status } {
@@ -95,14 +96,17 @@ pub const Delay = struct {
 };
 
 pub const Reverb = struct {
+    // TODO: clean up with global random?
     var rand = std.Random.Xoroshiro128.init(0);
     var random = rand.random();
     const DelayLines = 10;
+
     sub_streamer: Streamer,
     bufs: [DelayLines]DelayBuf,
     playback: f32,
     rest: u32,
-    pub fn initSample(sub_streamer: Streamer, delay_sample: [DelayLines]u32, playback: f32) Reverb {
+
+    pub fn init_samples(delay_sample: [DelayLines]u32, playback: f32, sub_streamer: Streamer) Reverb {
         var res = Reverb {
             .sub_streamer = sub_streamer,
             .bufs = undefined,
@@ -115,21 +119,22 @@ pub const Reverb = struct {
         return res;
     }
 
-    pub fn initSecs(sub_streamer: Streamer, delay_secs: [DelayLines]f32, playback: f32) Reverb {
+    pub fn init_secs(delay_secs: [DelayLines]f32, playback: f32, sub_streamer: Streamer) Reverb {
         var delay_samples: [DelayLines]u32 = undefined;
         for (0..DelayLines) |i| {
             delay_samples[i] = @intFromFloat(delay_secs[i] * Config.SAMPLE_RATE);
         }
-        return initSample(sub_streamer, delay_samples, playback);
+        return init_samples(delay_samples, playback, sub_streamer);
     }
 
-    pub fn initRandomize(sub_streamer: Streamer, sec: f32, randomness: f32, playback: f32) Reverb {
+    pub fn init_randomize(sec: f32, randomness: f32, playback: f32, sub_streamer: Streamer) Reverb {
         var delay_secs: [DelayLines]f32 = undefined;
         for (0..DelayLines) |i| {
             delay_secs[i] = sec + 2*(random.float(f32)-0.5) * randomness * sec;
         }
-        return initSecs(sub_streamer, delay_secs, playback);
+        return init_secs(delay_secs, playback, sub_streamer);
     }
+
     fn read(ptr: *anyopaque, out: []f32) struct { u32, Streamer.Status } {
         const self: *Reverb = @alignCast(@ptrCast(ptr));
         _ = self.sub_streamer.read(out);

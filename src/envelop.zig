@@ -9,6 +9,7 @@ pub fn LinearEnvelop(comptime DuraT: type, comptime ValT: type) type{
         const Self = @This();
         durations: []const DuraT,
         heights: []const ValT,
+
         pub fn init(durations: []const DuraT, heights: []const ValT) Self {
             std.debug.assert(durations.len > 0);
             std.debug.assert(durations.len == heights.len - 1);
@@ -32,9 +33,11 @@ pub const Envelop = struct {
     le: LinearEnvelop(f32, f32),
     t: f32,
     sub_stream: Streamer,
+
     pub fn init(durations: []const f32, heights: []const f32, sub_stream: Streamer) Envelop {
         return .{ .le = LinearEnvelop(f32, f32).init(durations, heights), .t = 0, .sub_stream = sub_stream };
     }
+
     fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
         const self: *Envelop = @alignCast(@ptrCast(ptr));
         const len, const sub_status = self.sub_stream.read(frames);
@@ -51,6 +54,7 @@ pub const Envelop = struct {
             return .{ len, sub_status };
         }
     }
+
     pub fn streamer(self: *Envelop) Streamer {
         return .{
             .ptr = @ptrCast(self),
@@ -60,6 +64,7 @@ pub const Envelop = struct {
             },
         };
     }
+
     fn reset(ptr: *anyopaque) bool {
         const self: *Envelop = @alignCast(@ptrCast(ptr));
         self.t = 0;
@@ -78,6 +83,7 @@ pub const LiveEnvelop = struct {
     sustain_end_t: f64 = undefined,
     
     sub_stream: Streamer,
+
     pub fn init(attack: f32, decay: f32, release: f32, sub_stream: Streamer) LiveEnvelop {
         return .{
             .attack = attack,

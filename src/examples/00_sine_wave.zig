@@ -1,6 +1,6 @@
 const std = @import("std");
+
 const Zynth = @import("zynth");
-const c = Zynth.c;
 const Waveform = Zynth.Waveform;
 const Audio = Zynth.Audio;
 

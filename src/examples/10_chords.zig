@@ -1,6 +1,7 @@
 const std = @import("std");
+
 const Zynth = @import("zynth");
-const c = Zynth.c;
+const c = Zynth.capi;
 const Waveform = Zynth.Waveform;
 const Envelop = Zynth.Envelop;
 const Mixer = Zynth.Mixer;
@@ -43,7 +44,7 @@ fn play_progression(progression: []const [3]u32, mixer: *Mixer, a: std.mem.Alloc
                 try a.dupe(f32, &.{0.0, 1.0, 0.6, 0.6, 0.0}), 
                 waveform.streamer()));
             
-            const wait = create(a, Zynth.Delay.Wait.init_secs(envelop.streamer(), @as(f32, @floatFromInt(ci)) * whole_note));
+            const wait = create(a, Zynth.Delay.Wait.init_secs(@as(f32, @floatFromInt(ci)) * whole_note, envelop.streamer()));
             mixer.play(wait.streamer());
         }
     }
@@ -75,7 +76,7 @@ pub fn main() !void {
     var mixer = Mixer {};
     try play_progression(&progression, &mixer, alloc);
     var loop = Replay.Repeat.init_secs(whole_note * 4, null, mixer.streamer()); // 4 bars
-    var reverb = Zynth.Delay.Reverb.initRandomize(loop.streamer(), 0.25, 1, 0.3);
+    var reverb = Zynth.Delay.Reverb.init_randomize(0.25, 1, 0.3, loop.streamer());
     var streamer = reverb.streamer();
 
     var ctx = Audio.SimpleAudioCtx {};

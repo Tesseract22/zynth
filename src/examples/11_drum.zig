@@ -1,16 +1,13 @@
 const std = @import("std");
+
 const Zynth = @import("zynth");
-const c = Zynth.c;
 const Waveform = Zynth.Waveform;
-const Envelop = Zynth.Envelop;
 const Mixer = Zynth.Mixer;
-const RingBuffer = Zynth.RingBuffer;
 const Replay = Zynth.Replay;
-const Modulate = Zynth.Modulate;
 const Audio = Zynth.Audio;
-const Config = Zynth.Config;
 const Delay = Zynth.Delay;
 const Streamer = Zynth.Streamer;
+
 const Preset = @import("preset");
 
 
@@ -39,7 +36,7 @@ pub fn main() !void {
         loop.* = Replay.Repeat.init_secs(whole_note/2.0, null, try Preset.Drum.close_hi_hat(a));
 
         const wait = try a.create(Delay.Wait);
-        wait.* = Delay.Wait.init_secs(loop.streamer(), whole_note/4.0);
+        wait.* = Delay.Wait.init_secs(whole_note/4.0, loop.streamer());
 
 
         mixer.play(wait.streamer());
@@ -49,7 +46,7 @@ pub fn main() !void {
         loop.* = Replay.Repeat.init_secs(whole_note, null, try Preset.Drum.snare(a));
 
         const wait = try a.create(Delay.Wait);
-        wait.* = Delay.Wait.init_secs(loop.streamer(), whole_note*2.0/4.0);
+        wait.* = Delay.Wait.init_secs(whole_note*2.0/4.0, loop.streamer());
 
         mixer.play(wait.streamer());
     }

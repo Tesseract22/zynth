@@ -6,6 +6,7 @@ const Waveform = @import("waveform.zig");
 const Streamer = @import("streamer.zig");
 const Envelop = Waveform.Envelop;
 const KeyBoard = @This();
+
 pub const WAVEFORM_POOL_LEN = 32;
 
 // Design 1.
@@ -14,43 +15,20 @@ pub const WAVEFORM_POOL_LEN = 32;
 // When kay is released, it calls the 'stop' method of the streamer
 //
 const Key = c_int; // A key, as in a key on the keyboard
-pub const default_regular_key_sequence: []const Key = &.{
-        c.KEY_Q, 	
-	c.KEY_W, 	
-	c.KEY_E,	
-	c.KEY_R,	
-	c.KEY_T,	
-	c.KEY_Y,	
-	c.KEY_U,	
-	c.KEY_I,	
-	c.KEY_O,    	
-	c.KEY_P,	
-};
-pub const default_piano_key_sequence: []const Key = &.{
-        c.KEY_Q, 	
-	c.KEY_TWO, 	
-	c.KEY_W, 	
-	c.KEY_THREE,	
-	c.KEY_E,	
-	c.KEY_R,	
-	c.KEY_FIVE,	
-	c.KEY_T,	
-	c.KEY_SIX,	
-	c.KEY_Y,	
-	c.KEY_SEVEN,	
-	c.KEY_U,	
-	c.KEY_I,	
-	c.KEY_NINE,	
-	c.KEY_O,    	
-	c.KEY_ZERO,	
-	c.KEY_P,	
-};
+pub const default_regular_key_sequence: []const Key = 
+    &.{
+        c.KEY_Q, c.KEY_W, c.KEY_E, c.KEY_R, c.KEY_T, c.KEY_Y, c.KEY_U, c.KEY_I, c.KEY_O, c.KEY_P,
+    };
+pub const default_piano_key_sequence: []const Key = 
+    &.{
+        c.KEY_Q, c.KEY_TWO, c.KEY_W, c.KEY_THREE, c.KEY_E, c.KEY_R, c.KEY_FIVE, c.KEY_T, c.KEY_SIX, c.KEY_Y,
+	c.KEY_SEVEN, c.KEY_U, c.KEY_I, c.KEY_NINE, c.KEY_O, c.KEY_ZERO, c.KEY_P, 
+    };
 
 keys: []const Key,
 streamers: []const Streamer,
 playing: std.DynamicBitSetUnmanaged,
 
-       
 pub fn init(keys: []const Key, streamers: []const Streamer, a: std.mem.Allocator) KeyBoard {
     assert(keys.len == streamers.len);
     return .{ .keys = keys, .streamers = streamers, .playing = std.DynamicBitSetUnmanaged.initEmpty(a, keys.len) catch unreachable };
