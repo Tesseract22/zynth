@@ -18,25 +18,37 @@ var random = rand.random();
 const create = Audio.create;
 
 pub fn bass(a: std.mem.Allocator) !Streamer {
-    const sine = create(a, Waveform.FreqEnvelop.init(1.0, Envelop.LinearEnvelop(f64, f64).init(
-            try a.dupe(f64, &.{0.02, 0.5}), 
-            try a.dupe(f64, &.{300, 50, 50})
+    const mixer = create(a, Mixer {});
+    {
+        const hit = create(a, Waveform.BrownNoise {.white = Waveform.WhiteNoise {.amp = 0.65, .random = random }, .rc = 0.1 });
+        const hit_envelop = create(a, Envelop.Envelop.init(
+                try a.dupe(f32, &.{0.005}),
+                try a.dupe(f32, &.{1.0, 0}),
+                hit.streamer()));
+        mixer.play(hit_envelop.streamer());
+    }
+    {
+        const sine = create(a, Waveform.FreqEnvelop.init(1.0, Envelop.LinearEnvelop(f64, f64).init(
+                    try a.dupe(f64, &.{0.02, 0.12}),
+                    try a.dupe(f64, &.{300, 50, 50})
 
-    ), .Sine));
-    const envelop = create(a, Envelop.Envelop.init(
-        try a.dupe(f32, &.{0.02, 0.02, 0.4, 0.02}), 
-        try a.dupe(f32, &.{0.0, 1.0, 0.8, 0.6, 0.0}), 
-        sine.streamer()
-    ));
-    return envelop.streamer();
+        ), .Sine));
+        const envelop = create(a, Envelop.Envelop.init(
+                try a.dupe(f32, &.{0.02, 0.12}),
+                try a.dupe(f32, &.{1, 0.4, 0.0}),
+                sine.streamer()
+        ));
+        mixer.play(envelop.streamer());
+    }
+    return mixer.streamer();
 }
 
 // TODO: experiment with ring modulator
 pub fn close_hi_hat(a: std.mem.Allocator) !Streamer {
     const noise = create(a, Waveform.WhiteNoise {.amp = 0.15, .random = random });
     const envelop = create(a, Envelop.Envelop.init(
-        try a.dupe(f32, &.{0.01, 0.05}), 
-        try a.dupe(f32, &.{0.0, 1.0, 0.0}), 
+        try a.dupe(f32, &.{0.05}),
+        try a.dupe(f32, &.{1.0, 0.0}),
         noise.streamer()));
     return envelop.streamer();
 }
