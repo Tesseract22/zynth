@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) void {
     preset.addImport("zynth", zynth);
     
     const prefix_filter_opt = b.option([]const u8, "example-filter", "filter the the examples to build with the prefix of the provided strings.");
+    const enable_target_suffix = b.option(bool, "enable-target-suffix", "Appends the target triple to the executable name, useful creating github releases.") orelse false;
 
     var dir = std.fs.cwd().openDir("src/examples", .{.iterate = true}) catch unreachable;
     defer dir.close();
@@ -36,13 +37,16 @@ pub fn build(b: *std.Build) void {
         if (prefix_filter_opt) |prefix_filter| {
             if (!std.mem.startsWith(u8, file.name, prefix_filter)) continue;
         }
-        std.log.info("Compiling example {s}", .{file.name});
+        const stripped = file.name[0..file.name.len-4];
+        const exe_name = if (enable_target_suffix) stripped else b.fmt("{s}-{s}-{s}-{s}", 
+            .{stripped, @tagName(target.result.cpu.arch), @tagName(target.result.abi), @tagName(target.result.os.tag)});
+        std.log.info("Compiling example {s}", .{exe_name});
         const exe = b.addExecutable(
             .{
                 .root_source_file = b.path(b.fmt("src/examples/{s}", .{file.name})),
                 .target = target,
                 .optimize = opt,
-                .name = file.name[0..file.name.len-4],
+                .name = exe_name,
             }
         );
         exe.root_module.addImport("zynth", zynth);
