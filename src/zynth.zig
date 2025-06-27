@@ -13,3 +13,22 @@ pub const Waveform = @import("waveform.zig");
 
 pub const SimpleAudioCtx = Audio.SimpleAudioCtx;
 
+pub const NoteDuration = enum(u8) {
+    Whole = 0,
+    Half = 1,
+    Quater = 2,
+    Eighth = 3,
+    Sixteenth = 4,
+    _,
+
+    pub fn to_sec(self: NoteDuration, bpm: f32) f32 {
+        return (60.0 / bpm) * 4.0 / @exp2(@as(f32, @floatFromInt(@intFromEnum(self))));
+    }
+    
+};
+
+// 0 is the C3, the middle C
+pub fn pitch_to_freq(p: i32) f32 {
+   return 130.81 * @exp2(@as(f32, @floatFromInt(p))/12.0);
+}
+
