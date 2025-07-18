@@ -77,10 +77,10 @@ pub fn main() !void {
     try play_progression(&progression, &mixer, alloc);
     var loop = Replay.Repeat.init_secs(whole_note * 4, null, mixer.streamer()); // 4 bars
     var reverb = Zynth.Delay.Reverb.init_randomize(0.25, 1, 0.3, loop.streamer());
-    var streamer = reverb.streamer();
+    const streamer = reverb.streamer();
 
     var ctx = Audio.SimpleAudioCtx {};
-    try ctx.init(&streamer);
+    try ctx.init(streamer);
     ctx.device.onData = data_callback;
     try ctx.start();
     defer ctx.deinit();

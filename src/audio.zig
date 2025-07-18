@@ -19,36 +19,41 @@ pub fn wait_for_input() void {
 
 pub fn read_frames(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const anyopaque, frameCount: u32) callconv(.c) void {
     _ = pInput;
-    const streamer: *Streamer = @alignCast(@ptrCast(pDevice[0].pUserData));
+    const ctx: *SimpleAudioCtx = @alignCast(@ptrCast(pDevice[0].pUserData));
     const float_out: [*]f32 = @alignCast(@ptrCast(pOutput));
-    _ = streamer.read(float_out[0..frameCount]);
+    _, const status = ctx.streamer.read(float_out[0..frameCount]);
+    if (status == .Stop) std.debug.assert(c.ma_event_signal(&ctx.stop_event) == c.MA_SUCCESS);
 }
 
-pub fn init_device_config(callback: *const AudioCallBack, streamer: *Streamer) c.ma_device_config {
+pub fn init_device_config(callback: *const AudioCallBack, ctx: *SimpleAudioCtx) c.ma_device_config {
     var device_config = c.ma_device_config_init(c.ma_device_type_playback);
     device_config.playback.format   = Config.DEVICE_FORMAT;
     device_config.playback.channels = Config.CHANNELS;
     device_config.sampleRate        = Config.SAMPLE_RATE;
     device_config.dataCallback      = callback;
-    device_config.pUserData         = streamer;
+    device_config.pUserData         = ctx;
     return device_config;
 }
 
 const Error = error {
     DeviceError,
+    EventError,
 };
 
 pub const SimpleAudioCtx = struct {
+    stop_event: c.ma_event = undefined, 
     device: c.ma_device = undefined,
     device_config: c.ma_device_config = undefined,
-    // pub fn init(streamer: *Streamer) Error!SimpleAudioCtx {
-    //     var res: SimpleAudioCtx = undefined;
-    //     try res.init_impl(streamer);
-    //     return res;
-    // }
+    streamer: Streamer = undefined,
 
-    pub fn init(ctx: *SimpleAudioCtx, streamer: *Streamer) !void {
-        ctx.device_config = init_device_config(read_frames, streamer);
+    pub fn init(ctx: *SimpleAudioCtx, streamer: Streamer) !void {
+        if (c.ma_event_init(&ctx.stop_event) != c.MA_SUCCESS) {
+            std.log.err("Failed to init stop event", .{});
+            return error.EventError;
+
+        }
+        ctx.streamer = streamer;
+        ctx.device_config = init_device_config(read_frames, ctx);
         if (c.ma_device_init(null, &ctx.device_config, &ctx.device) != c.MA_SUCCESS) {
             std.log.err("Failed to open playback device.", .{});
             return error.DeviceError;
@@ -62,7 +67,11 @@ pub const SimpleAudioCtx = struct {
         }
     }
 
+    pub fn drain(self: *SimpleAudioCtx) void {
+       std.debug.assert(c.ma_event_wait(&self.stop_event) == c.MA_SUCCESS);
+    }
+
     pub fn deinit(self: *SimpleAudioCtx) void {
         c.ma_device_uninit(&self.device);
-    }
+  }
 };

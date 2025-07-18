@@ -10,7 +10,7 @@ pub const Status = enum(u8) {
 ptr: *anyopaque,
 vtable: VTable,
 
-const VTable = struct {
+pub const VTable = struct {
     read: *const fn(self: *anyopaque, frames: []f32) struct { u32, Status },
     reset: *const fn(self: *anyopaque) bool,
     stop: *const fn(self: *anyopaque) bool = stop_noop,

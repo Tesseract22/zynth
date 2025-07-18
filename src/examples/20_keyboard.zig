@@ -73,10 +73,10 @@ pub fn main() !void {
     const rect_w: f32 = WINDOW_W/@as(f32, @floatFromInt(Config.WAVEFORM_RECORD_RINGBUF_SIZE));
 
     init_keyboard_streams(0, octave, a);
-    var streamer = kb.streamer();
+    const streamer = kb.streamer();
 
     var ctx = Audio.SimpleAudioCtx {};
-    try ctx.init(&streamer);
+    try ctx.init(streamer);
     ctx.device.onData = data_callback;
     try ctx.start();
     defer ctx.deinit();
