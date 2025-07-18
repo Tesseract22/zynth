@@ -16,7 +16,7 @@ pub const SimpleAudioCtx = Audio.SimpleAudioCtx;
 pub const NoteDuration = enum(u8) {
     Whole = 0,
     Half = 1,
-    Quater = 2,
+    Quarter = 2,
     Eighth = 3,
     Sixteenth = 4,
     _,
