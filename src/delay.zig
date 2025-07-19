@@ -169,3 +169,42 @@ pub const Reverb = struct {
         };
     }
 };
+
+pub const AndThen = struct {
+    lhs: Streamer,
+    rhs: Streamer,
+
+    lhs_done: bool = false,
+
+    fn read(ptr: *anyopaque, out: []f32) struct { u32, Streamer.Status } {
+        const self: *AndThen = @alignCast(@ptrCast(ptr));
+        var off: u32 = 0;
+        while (off < out.len) {
+            if (!self.lhs_done) {
+                const len, const status = self.lhs.read(out[off..]);
+                if (status == .Stop) self.lhs_done = true;
+                off += len;
+            } else {
+                const len, const status = self.rhs.read(out[off..]);
+                off += len;
+                if (status == .Stop) return .{ off, .Stop };
+            }
+        }
+        return .{ off, .Continue };
+    }
+
+    fn reset(ptr: *anyopaque) bool {
+        const self: *AndThen = @alignCast(@ptrCast(ptr));
+        return self.lhs.reset() and self.rhs.reset();
+    }
+
+    pub fn streamer(self: *AndThen) Streamer {
+        return .{
+            .ptr = @ptrCast(self),
+            .vtable = .{
+                .read = read,
+                .reset = reset,
+            }
+        };
+    }
+};

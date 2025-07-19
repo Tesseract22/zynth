@@ -18,10 +18,9 @@ pub fn main() !void {
     const a = arena.allocator();
 
     var mixer = Mixer {};
-    const streamer = mixer.streamer();
 
     var ctx = Audio.SimpleAudioCtx {};
-    try ctx.init(streamer);
+    try ctx.init(mixer.streamer());
     try ctx.start();
     const bpm = 120.0;
     const whole_note = 60.0/bpm * 4.0;

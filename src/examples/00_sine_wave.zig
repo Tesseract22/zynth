@@ -7,9 +7,8 @@ const Audio = Zynth.Audio;
 
 pub fn main() !void {
     var sine_wave = Waveform.Simple.init(0.5, 440, .Sine);
-    const streamer = sine_wave.streamer();
     var ctx = Audio.SimpleAudioCtx {};
-    try ctx.init(streamer);
+    try ctx.init(sine_wave.streamer());
     defer ctx.deinit();
     try ctx.start();
 

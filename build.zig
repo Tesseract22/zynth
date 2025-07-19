@@ -38,7 +38,7 @@ pub fn build(b: *std.Build) void {
             if (!std.mem.startsWith(u8, file.name, prefix_filter)) continue;
         }
         const stripped = file.name[0..file.name.len-4];
-        const exe_name = if (enable_target_suffix) stripped else b.fmt("{s}-{s}-{s}-{s}", 
+        const exe_name = if (!enable_target_suffix) stripped else b.fmt("{s}-{s}-{s}-{s}", 
             .{stripped, @tagName(target.result.cpu.arch), @tagName(target.result.abi), @tagName(target.result.os.tag)});
         const exe = b.addExecutable(
             .{
