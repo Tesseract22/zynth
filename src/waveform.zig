@@ -58,6 +58,8 @@ pub const Simple = struct {
     frequency: f64,
     shape: Shape,
 
+    pub const silence = Simple.init(0, 440, .Sine);
+
     fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
         const self: *Simple = @alignCast(@ptrCast(ptr));
         const func = self.shape.get_wave_func();

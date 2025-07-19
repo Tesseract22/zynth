@@ -29,10 +29,50 @@ pub fn LinearEnvelop(comptime DuraT: type, comptime ValT: type) type{
     };
 }
 
+pub const SimpleCutoff = struct {
+    cutoff_sec: f32,
+    t: f32 = 0,
+    sub_stream: Streamer,
+
+    fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
+        const self: *SimpleCutoff = @alignCast(@ptrCast(ptr));
+        const advance = 1.0/@as(comptime_float, @floatFromInt(Config.SAMPLE_RATE));
+        const len, const sub_status = self.sub_stream.read(frames);
+
+        for (0..frames.len) |i| {
+            self.t += advance;
+            if (self.t >= self.cutoff_sec) {
+                @memset(frames[i..], 0);
+                return .{ @intCast(i), .Stop };
+            }
+        } else {
+            return .{ len, sub_status };
+        }
+    }
+
+    pub fn streamer(self: *SimpleCutoff) Streamer {
+        return .{
+            .ptr = @ptrCast(self),
+            .vtable = .{
+                .read = read,
+                .reset = reset,
+            },
+        };
+    }
+
+    fn reset(ptr: *anyopaque) bool {
+        const self: *SimpleCutoff = @alignCast(@ptrCast(ptr));
+        self.t = 0;
+        return self.sub_stream.reset();
+    }   
+};
+
 pub const Envelop = struct {
     le: LinearEnvelop(f32, f32),
     t: f32,
     sub_stream: Streamer,
+
+
 
     pub fn init(durations: []const f32, heights: []const f32, sub_stream: Streamer) Envelop {
         return .{ .le = LinearEnvelop(f32, f32).init(durations, heights), .t = 0, .sub_stream = sub_stream };
@@ -81,7 +121,7 @@ pub const LiveEnvelop = struct {
     t: f64 = 0,
     should_sustain: bool = true,
     sustain_end_t: f64 = undefined,
-    
+
     sub_stream: Streamer,
 
     pub fn init(attack: f32, decay: f32, release: f32, sub_stream: Streamer) LiveEnvelop {
