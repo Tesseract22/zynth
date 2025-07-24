@@ -15,13 +15,11 @@ fn data_callback(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const
     Audio.read_frames(pDevice, pOutput, pInput, frameCount);
     const float_out: [*]f32 = @alignCast(@ptrCast(pOutput));
     var window_sum: f32 = 0;
-    if (Config.GRAPHIC) {
-        for (0..frameCount) |frame_i| {
-            window_sum += float_out[frame_i * Config.CHANNELS]; // only cares about the first channel
-            if ((frame_i+1) % Config.WAVEFORM_RECORD_GRANULARITY == 0) { // TODO: checks for unused frame at the end
-                waveform_record.push(window_sum/Config.WAVEFORM_RECORD_GRANULARITY);
-                window_sum = 0;
-            }
+    for (0..frameCount) |frame_i| {
+        window_sum += float_out[frame_i * Config.CHANNELS]; // only cares about the first channel
+        if ((frame_i+1) % Config.WAVEFORM_RECORD_GRANULARITY == 0) { // TODO: checks for unused frame at the end
+            waveform_record.push(window_sum/Config.WAVEFORM_RECORD_GRANULARITY);
+            window_sum = 0;
         }
     }
 }
