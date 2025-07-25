@@ -211,6 +211,7 @@ pub const BrownNoise = struct {
 };
 
 pub const StringNoise = struct {
+    pub const stop_epsilon: f32 = 0.00001;
     buf: [1024]f32,
     count: u32,
     buf_len: u32,
@@ -222,15 +223,17 @@ pub const StringNoise = struct {
     random: std.Random,
     
     stopped: bool = false,
-    pub fn init(amp: f32, freq: f64, random: std.Random) StringNoise {
+    t: ?struct {dura: f32, elapse: f32},
+    pub fn init(amp: f32, freq: f64, random: std.Random, dura_or_null: ?f32) StringNoise {
         var sn = StringNoise {
             .count = 0,
             .buf_len = @intFromFloat(Config.SAMPLE_RATE / freq),
             .feedback = 0.99996,                       
-            .stop_feedback = 0.6,
+            .stop_feedback = 0.95,
             .buf = undefined,
             .amp = amp,
-            .random = random
+            .random = random,
+            .t = if (dura_or_null) |dura| .{.dura = dura, .elapse = 0} else null,
         };
         std.debug.assert(sn.buf_len <= 1024);
         for (0..sn.buf_len) |i| {
@@ -246,8 +249,10 @@ pub const StringNoise = struct {
     fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
         const self: *StringNoise = @alignCast(@ptrCast(ptr));
         for (0..frames.len) |frame_i| {
-            for (0..Config.CHANNELS) |channel_i| {
-                frames[frame_i * Config.CHANNELS + channel_i] = self.buf[self.count] * self.amp;
+            frames[frame_i] = self.buf[self.count] * self.amp;
+            if (self.t) |*t| {
+                t.elapse += 1.0 / @as(f32, @floatFromInt(Config.SAMPLE_RATE));
+                if (t.elapse >= t.dura) self.stopped = true;
             }
             const range = 1;
             var sum: f32 = 0;
@@ -260,6 +265,11 @@ pub const StringNoise = struct {
             self.buf[self.count] = sum / (range * 2 + 1) * if (self.stopped) self.stop_feedback else self.feedback;
             self.count = (self.count + 1) % self.buf_len;
         }
+        var sum: f32 = 0;
+        for (frames) |f|
+            sum += @abs(f);
+        const avg = sum / @as(f32, @floatFromInt(frames.len));
+        if (avg < stop_epsilon) return .{ @intCast(frames.len), .Stop };
         return .{ @intCast(frames.len), .Continue };
     }
 
@@ -270,6 +280,9 @@ pub const StringNoise = struct {
         }
         self.stopped = false;
         self.count = 0;
+        if (self.t) |*t| {
+            t.elapse = 0;
+        }
         return true;
     }
 

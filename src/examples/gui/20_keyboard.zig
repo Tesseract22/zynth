@@ -40,7 +40,7 @@ fn init_keyboard_streams(shape: u32, octave: i32, a: std.mem.Allocator) void {
     if (shape == shape_ct) {
         for (0..total_keys) |k| {
             const freq = @exp2(@as(f32, @floatFromInt(k)) / 12.0 + @as(f32, @floatFromInt(octave))) * 440;
-            strings[k] = String.init(0.5, freq, random);
+            strings[k] = String.init(0.5, freq, random, null);
             streams[k] = strings[k].streamer();
         }
     } else {
