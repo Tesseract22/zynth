@@ -1,5 +1,4 @@
 const std = @import("std");
-const c = @import("c.zig");
 const Streamer = @import("streamer.zig");
 const Config = @import("config.zig");
 const lerp = std.math.lerp;

@@ -1,5 +1,4 @@
 const std = @import("std");
-const c = @import("c.zig");
 
 const Waveform = @import("waveform.zig");
 const Streamer = @import("streamer.zig");

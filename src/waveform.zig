@@ -1,6 +1,5 @@
 const std = @import("std");
 const math = std.math;
-const c = @import("c.zig");
 
 const Streamer = @import("streamer.zig");
 const Envelop = @import("envelop.zig");

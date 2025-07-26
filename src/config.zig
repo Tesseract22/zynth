@@ -1,4 +1,4 @@
-const c = @import("c.zig");
+const c = @import("c");
 const Meta = @import("MetaConfig");
 pub const SAMPLE_RATE = 44100;
 pub const CHANNELS = 1;

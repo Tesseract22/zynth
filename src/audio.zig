@@ -1,4 +1,4 @@
-const c = @import("c.zig");
+const c = @import("c");
 const Streamer = @import("streamer.zig");
 const Config = @import("config.zig");
 const std = @import("std");
@@ -12,9 +12,10 @@ pub fn create(a: std.mem.Allocator, val: anytype) *@TypeOf(val) {
 }
 
 pub fn wait_for_input() void {
-    const stdin = std.io.getStdIn();
-    const reader = stdin.reader();
-    _ = reader.readByte() catch unreachable;
+    var stdin = std.fs.File.stdin();
+    var buf: [1]u8 = undefined;
+    var reader = stdin.reader(&buf);
+    reader.interface.readSliceAll(&buf) catch unreachable;
 }
 
 pub fn read_frames(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const anyopaque, frameCount: u32) callconv(.c) void {

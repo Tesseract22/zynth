@@ -1,6 +1,6 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const c = @import("c.zig");
+const c = @import("c");
 
 const Waveform = @import("waveform.zig");
 const Streamer = @import("streamer.zig");

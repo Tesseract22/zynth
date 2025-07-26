@@ -1,4 +1,4 @@
-pub const capi = @import("c.zig");
+pub const capi = @import("c");
 pub const Audio = @import("audio.zig");
 pub const Config = @import("config.zig");
 pub const Delay = @import("delay.zig");
