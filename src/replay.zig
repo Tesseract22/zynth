@@ -62,3 +62,42 @@ pub const Repeat = struct {
         };
     }
 };
+
+pub const RepeatAfterStop = struct {
+    sub_streamer: Streamer,
+    count_init: ?u32,
+
+    count: u32 = 0,
+
+    pub fn init(count: ?u32, sub_streamer: Streamer) RepeatAfterStop {
+        return .{ .sub_streamer = sub_streamer, .count_init = count };
+    } 
+
+    fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
+        const self: *RepeatAfterStop = @alignCast(@ptrCast(ptr));
+        var off: u32 = 0;
+        while (off < frames.len) {
+            const len, const status = self.sub_streamer.read(frames[off..]);
+            off += len;
+            if (status == .Stop) _ = self.sub_streamer.reset(); 
+        } return .{ @intCast(frames.len), .Continue };
+    }
+
+    fn reset(ptr: *anyopaque) bool {
+        const self: *Repeat = @alignCast(@ptrCast(ptr));
+        self.count = 0;
+        self.curr = 0;
+        return self.sub_streamer.reset();
+
+    }
+
+    pub fn streamer(self: *RepeatAfterStop) Streamer {
+        return .{
+            .ptr = @ptrCast(self),
+            .vtable = .{
+                .read = read,
+                .reset = reset,
+            },
+        };
+    }
+};

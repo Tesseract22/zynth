@@ -47,7 +47,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/zynth.zig"),
         .target = target,
         .optimize = opt,
-        .link_libc = true,
+        .link_libc = enable_gui,
     });
     if (enable_gui) {
         const rl = b.lazyDependency("raylib", .{.target = target, .optimize = opt}) orelse return;
@@ -68,7 +68,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/preset/preset.zig"),
         .target = target,
         .optimize = opt,
-        .link_libc = true,
+        .link_libc = enable_gui,
     });
     preset.addImport("zynth", zynth);
 
@@ -77,6 +77,10 @@ pub fn build(b: *std.Build) void {
     
     compile_dir(b, target, opt, "src/examples", enable_target_suffix, prefix_filter_opt, zynth, preset);
     if (enable_gui) compile_dir(b, target, opt, "src/examples/gui", enable_target_suffix, prefix_filter_opt, zynth, preset);
+
+    const wasm_target = b.resolveTargetQuery(.{.cpu_arch = .wasm32});
+    std.log.debug("wasm target {}", .{wasm_target});
+    compile_dir(b, wasm_target, opt, "src/examples", enable_target_suffix, prefix_filter_opt, zynth, preset);
 
 
 }
