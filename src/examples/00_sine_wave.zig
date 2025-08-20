@@ -5,13 +5,15 @@ const Waveform = Zynth.Waveform;
 const Audio = Zynth.Audio;
 
 
-pub fn main() !void {
+
+
+pub fn main() callconv(.c) void {
+    // std.log.debug("Hello World", .{});
     var sine_wave = Waveform.Simple.init(0.5, 440, .Sine);
     var ctx = Audio.SimpleAudioCtx {};
-    try ctx.init(sine_wave.streamer());
+    ctx.init(sine_wave.streamer()) catch unreachable;
     defer ctx.deinit();
-    try ctx.start();
-
+    ctx.start() catch unreachable;
+    
     Audio.wait_for_input();
 }
-

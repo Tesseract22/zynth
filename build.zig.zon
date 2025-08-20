@@ -36,6 +36,10 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
+        .zemscripten = .{
+            .url = "git+https://github.com/zig-gamedev/zemscripten.git#97eb64f422a110a813f298585acbfb604f7fe08c",
+            .hash = "zemscripten-0.2.0-dev-sRlDqLZNAABqYJZMdZSczedrT29D5Wu2t5kLci0yd9uU",
+        },
     },
     .paths = .{
         "build.zig",

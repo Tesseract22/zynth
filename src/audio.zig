@@ -2,6 +2,7 @@ const c = @import("c");
 const Streamer = @import("streamer.zig");
 const Config = @import("config.zig");
 const std = @import("std");
+const builtin = @import("builtin");
 
 const AudioCallBack = fn (pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const anyopaque, frameCount: u32) callconv(.c) void;
 
@@ -11,11 +12,17 @@ pub fn create(a: std.mem.Allocator, val: anytype) *@TypeOf(val) {
     return res;
 }
 
+fn loop() callconv(.c) void {}
 pub fn wait_for_input() void {
-    var stdin = std.fs.File.stdin();
-    var buf: [1]u8 = undefined;
-    var reader = stdin.reader(&buf);
-    reader.interface.readSliceAll(&buf) catch unreachable;
+    if (builtin.target.os.tag == .emscripten) {
+        const zemscripten = @import("zemscripten");
+        zemscripten.setMainLoop(loop, null, true);
+    } else {
+        var stdin = std.fs.File.stdin();
+        var buf: [1]u8 = undefined;
+        var reader = stdin.reader(&buf);
+        reader.interface.readSliceAll(&buf) catch unreachable;
+    }
 }
 
 pub fn read_frames(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const anyopaque, frameCount: u32) callconv(.c) void {
@@ -49,30 +56,30 @@ pub const SimpleAudioCtx = struct {
 
     pub fn init(ctx: *SimpleAudioCtx, streamer: Streamer) !void {
         if (c.ma_event_init(&ctx.stop_event) != c.MA_SUCCESS) {
-            std.log.err("Failed to init stop event", .{});
+            // std.log.err("Failed to init stop event", .{});
             return error.EventError;
 
         }
         ctx.streamer = streamer;
         ctx.device_config = init_device_config(read_frames, ctx);
         if (c.ma_device_init(null, &ctx.device_config, &ctx.device) != c.MA_SUCCESS) {
-            std.log.err("Failed to open playback device.", .{});
+            // std.log.err("Failed to open playback device.", .{});
             return error.DeviceError;
         }
     }
-    
+
     pub fn start(self: *SimpleAudioCtx) !void {
         if (c.ma_device_start(&self.device) != c.MA_SUCCESS) {
-            std.log.err("Failed to start playback device.", .{});
+            // std.log.err("Failed to start playback device.", .{});
             return error.DeviceError;
         }
     }
 
     pub fn drain(self: *SimpleAudioCtx) void {
-       std.debug.assert(c.ma_event_wait(&self.stop_event) == c.MA_SUCCESS);
+        std.debug.assert(c.ma_event_wait(&self.stop_event) == c.MA_SUCCESS);
     }
 
     pub fn deinit(self: *SimpleAudioCtx) void {
         c.ma_device_uninit(&self.device);
-  }
+    }
 };

@@ -32,3 +32,9 @@ pub fn pitch_to_freq(p: i32) f32 {
    return 130.81 * @exp2(@as(f32, @floatFromInt(p))/12.0);
 }
 
+
+const std = @import("std");
+const builtin = @import("builtin");
+pub const std_options = if (builtin.target.os.tag == .emscripten) std.Options{
+    .logFn = @import("zemscripten").log,
+} else .{};

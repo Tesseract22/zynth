@@ -22,21 +22,51 @@ fn compile_dir(
         const stripped = file.name[0..file.name.len-4];
         const exe_name = if (!enable_target_suffix) stripped else b.fmt("{s}-{s}-{s}-{s}", 
             .{stripped, @tagName(target.result.cpu.arch), @tagName(target.result.abi), @tagName(target.result.os.tag)});
+
+        const wasm_target = b.resolveTargetQuery(.{
+            .cpu_arch = .wasm32,
+            .cpu_model = .{ .explicit = &std.Target.wasm.cpu.mvp },
+            .cpu_features_add = std.Target.wasm.featureSet(&.{
+                .atomics,
+                .bulk_memory,
+            }),
+            .os_tag = .emscripten,
+        });
+
         const mod = b.addModule(file.name, .{
             .root_source_file = b.path(b.fmt("{s}/{s}", .{path, file.name})),
-            .target = target,
+            .target = if (target.result.cpu.arch.isWasm()) wasm_target else target,
             .optimize = opt,
         });
-        const exe = b.addExecutable(
-            .{
+        mod.addImport("zynth", zynth);
+        mod.addImport("preset", preset);
+
+
+        if (target.result.cpu.arch.isWasm()) {
+            const exe = b.addExecutable(
+                .{
+                    .root_module = mod,
+                    .name = exe_name,
+                }
+            );
+            const arti = b.addInstallArtifact(exe, .{});
+            step.dependOn(&arti.step);
+
+        } else {
+            const wasm = b.addLibrary(.{
+                .linkage = .static,
                 .root_module = mod,
-                .name = exe_name,
-            }
-        );
-        exe.root_module.addImport("zynth", zynth);
-        exe.root_module.addImport("preset", preset);
-        const arti = b.addInstallArtifact(exe, .{});
-        step.dependOn(&arti.step);
+                .name = exe_name
+            });
+            wasm.linkLibC();
+            // wasm.addIncludePath(.{ .cwd_relative = cache_include });
+            wasm.entry = .disabled; // for some reason it still export main in the std/start.zig ?? and this does not help anything
+            wasm.rdynamic = true;
+
+
+            const arti = b.addInstallArtifact(wasm, .{});
+            step.dependOn(&arti.step);
+        }
     }
 }
 pub fn build(b: *std.Build) !void {
@@ -48,19 +78,19 @@ pub fn build(b: *std.Build) !void {
     const meta_opts = b.addOptions();
     meta_opts.addOption(bool, "enable_gui", enable_gui);
 
-    
+
     const zynth = b.addModule("zynth", .{
         .root_source_file = b.path("src/zynth.zig"),
         .target = target,
         .optimize = opt,
-        .link_libc = enable_gui,
+        .link_libc = true,
     });
     const ma = b.addTranslateC(.{
         .optimize = opt,
         .target = target,
         .root_source_file = b.path("miniaudio.h"),
     });
-    
+
     const ma_mod = ma.createModule();
     if (enable_gui) {
         const rl = b.lazyDependency("raylib", .{.target = target, .optimize = opt}) orelse return;
@@ -97,20 +127,10 @@ pub fn build(b: *std.Build) !void {
         dir.close();
 
         ma.addIncludePath(.{ .cwd_relative = cache_include });
-        const wasm = b.addLibrary(.{
-            .root_module = zynth,
-            .linkage = .static,
-            .name = "zynth"
-        });
-        wasm.addIncludePath(.{ .cwd_relative = cache_include });
+        zynth.addIncludePath(.{ .cwd_relative = cache_include });
 
-        b.installArtifact(wasm);
-        for (wasm.getCompileDependencies(false)) |lib| {
-            if (lib.isStaticLibrary()) {
-                std.log.debug("{s}", .{lib.name});
-                // emcc.addArtifactArg(lib);
-            }
-        }
+        const zemscripten = b.dependency("zemscripten", .{});
+        zynth.addImport("zemscripten", zemscripten.module("root"));
     }
 
     const prefix_filter_opt = b.option([]const u8, "example-filter", "filter the the examples to build with the prefix of the provided strings.");
