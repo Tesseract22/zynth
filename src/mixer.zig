@@ -8,6 +8,7 @@ const Mixer = @This();
 pub const POOL_LEN = 32;
 
 streams: RingBuffer.FixedRingBuffer(Streamer, POOL_LEN) = .{},
+tmp: [4096]f32 = undefined,
     
 pub const KeyNote = struct {
     key: u8,
@@ -22,11 +23,12 @@ fn read(ptr: *anyopaque, float_out: []f32) struct { u32, Streamer.Status } {
     const self: *Mixer = @alignCast(@ptrCast(ptr));
     var max_len: u32 = 0;
     for (0..self.streams.data.len) |i| {
-        var tmp = [_]f32 {0} ** 4096;
+        std.debug.assert(self.tmp.len >= float_out.len);
+        @memset(&self.tmp, 0.0);
         if (!self.streams.active.isSet(@intCast(i))) continue;
-        const len, const status = self.streams.data[i].read(tmp[0..float_out.len]);
+        const len, const status = self.streams.data[i].read(self.tmp[0..float_out.len]);
         for (0..len) |frame_i|
-            float_out[frame_i] += tmp[frame_i];
+            float_out[frame_i] += self.tmp[frame_i];
         max_len = @max(max_len, len);
         _ = status;
         // if (status == .Stop) self.streams.remove(@intCast(i));

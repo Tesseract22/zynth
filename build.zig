@@ -42,7 +42,7 @@ fn compile_dir(
         mod.addImport("preset", preset);
 
 
-        if (target.result.cpu.arch.isWasm()) {
+        if (!target.result.cpu.arch.isWasm()) {
             const exe = b.addExecutable(
                 .{
                     .root_module = mod,
@@ -53,22 +53,40 @@ fn compile_dir(
             step.dependOn(&arti.step);
 
         } else {
-            const wasm = b.addLibrary(.{
+            const wasm_module = b.addLibrary(.{
                 .linkage = .static,
                 .root_module = mod,
                 .name = exe_name
-            });
-            wasm.linkLibC();
+           });
+            wasm_module.linkLibC();
             // wasm.addIncludePath(.{ .cwd_relative = cache_include });
-            wasm.entry = .disabled; // for some reason it still export main in the std/start.zig ?? and this does not help anything
-            wasm.rdynamic = true;
+            wasm_module.entry = .disabled; // for some reason it still export main in the std/start.zig ?? and this does not help anything
+            wasm_module.rdynamic = true;
+            wasm_module.bundle_ubsan_rt = false;
+            wasm_module.bundle_compiler_rt = false;
 
 
-            const arti = b.addInstallArtifact(wasm, .{});
-            step.dependOn(&arti.step);
+            const arti = b.addInstallArtifact(wasm_module, .{});
+            // step.dependOn(&arti.step);
+            const emcc = b.addSystemCommand(&.{"emcc", "-sMODULARIZE=1", "-sEXPORT_ES6=1"});
+            emcc.addArtifactArg(wasm_module);
+            emcc.addArg("-o");
+            const wasm = emcc.addOutputFileArg(b.fmt("{s}.mjs", .{exe_name}));
+
+            const install_wasm = b.addInstallDirectory(.{
+                .source_dir = wasm.dirname(),
+                .install_dir = .{ .custom = "web" },
+                .install_subdir = ".",
+            });
+
+            install_wasm.step.dependOn(&arti.step);
+            emcc.step.dependOn(&arti.step);
+            step.dependOn(&emcc.step);
+            step.dependOn(&install_wasm.step);
         }
     }
 }
+
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const opt = b.standardOptimizeOption(.{});

@@ -10,6 +10,12 @@ pub const Replay = @import("replay.zig");
 pub const RingBuffer = @import("ring_buffer.zig");
 pub const Streamer = @import("streamer.zig");
 pub const Waveform = @import("waveform.zig");
+// pub const CompilerRt = @import("compiler_rt.zig");
+// 
+// comptime {
+// 
+// std.testing.refAllDecls(CompilerRt);
+// }
 
 pub const SimpleAudioCtx = Audio.SimpleAudioCtx;
 
@@ -32,9 +38,10 @@ pub fn pitch_to_freq(p: i32) f32 {
    return 130.81 * @exp2(@as(f32, @floatFromInt(p))/12.0);
 }
 
-
 const std = @import("std");
 const builtin = @import("builtin");
+
+// use this overwrite options in case of emscripten
 pub const std_options = if (builtin.target.os.tag == .emscripten) std.Options{
     .logFn = @import("zemscripten").log,
 } else .{};

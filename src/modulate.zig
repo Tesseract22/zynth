@@ -19,7 +19,7 @@ pub const RingModulater = struct {
 
     fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
         const self: *RingModulater = @alignCast(@ptrCast(ptr));
-        var tmp = [_]f32 {0} ** 1024;
+        var tmp = [_]f32 {0} ** (1024 * 4);
         std.debug.assert(tmp.len >= frames.len);
         const len1, const status1 = self.modulator.read(tmp[0..frames.len]);
         const len2, const status2 = self.carrier.read(frames);

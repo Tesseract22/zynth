@@ -76,7 +76,12 @@ pub const SimpleAudioCtx = struct {
     }
 
     pub fn drain(self: *SimpleAudioCtx) void {
-        std.debug.assert(c.ma_event_wait(&self.stop_event) == c.MA_SUCCESS);
+        if (builtin.target.os.tag == .emscripten) {
+            const zemscripten = @import("zemscripten");
+            zemscripten.setMainLoop(loop, null, true);
+        } else {
+            std.debug.assert(c.ma_event_wait(&self.stop_event) == c.MA_SUCCESS);
+        }
     }
 
     pub fn deinit(self: *SimpleAudioCtx) void {

@@ -4,11 +4,7 @@ const Zynth = @import("zynth");
 const Waveform = Zynth.Waveform;
 const Audio = Zynth.Audio;
 
-
-
-
-pub fn main() callconv(.c) void {
-    // std.log.debug("Hello World", .{});
+pub fn main() void {
     var sine_wave = Waveform.Simple.init(0.5, 440, .Sine);
     var ctx = Audio.SimpleAudioCtx {};
     ctx.init(sine_wave.streamer()) catch unreachable;
