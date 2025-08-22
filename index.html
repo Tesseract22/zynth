@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zynth</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f8;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .music-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 100%;
+            max-width: 300px;
+        }
+        
+        .music-button {
+            background-color: #6c5ce7;
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .music-button:hover {
+            background-color: #5245c5;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        .music-button:active {
+            transform: translateY(0);
+        }
+        
+        audio {
+            display: none;
+        }
+        
+        .note-icon {
+            margin-right: 10px;
+            font-size: 18px;
+        }
+    </style>
+    <script>
+      import("./manifest.json", { with: { type: "json" } }).then(json => {
+	const list = document.getElementById("list");
+	json.default.sort().forEach(str => list.innerHTML += `<button class="music-button" id="${str}" onclick="togglePlaying(this.id)"> \
+	  <span class="note-icon">♪</span> ${str} \
+        </button>`
+      )});
+      let playing_name = '';
+      let ctx_list = [];
+      function togglePlaying(name) {
+	const btn = document.getElementById(name);
+	let loaded = false;
+	ctx_list.forEach(ctx => {
+	  console.log(ctx.name, name, ctx.ctx.state);
+	  if (ctx.name === name) {
+	    if (ctx.ctx.state == 'suspended') {
+	      ctx.ctx.resume();
+	      btn.firstElementChild.innerHTML = "🔈";
+	    }
+	    else if (ctx.ctx.state == 'running') {
+	      ctx.ctx.suspend();
+	      btn.firstElementChild.innerHTML = '🔇'
+	    }
+	    loaded = true;
+	  }
+	});
+	if (loaded) return;
+	btn.firstElementChild.innerHTML = '⌛' 
+	playing_name = name;
+	console.log("loading ", name);
+	const js_name = `./${name}.mjs`;
+	import(js_name)
+	  .then(module => {
+	    module.default({});
+	    btn.firstElementChild.innerHTML = "🔈";
+	  });
+      }
+      (function () {
+	// A proxy object to intercept AudioContexts and
+	// add them to the array for tracking and resuming later
+	self.AudioContext = new Proxy(self.AudioContext, {
+	  construct(target, args) {
+	    const result = new target(...args);
+	    ctx_list.push({ctx: result, name: playing_name});
+	    // if (result.state == "suspended") audioBtn.value = "🔈 RESUME";
+	    return result;
+	  },
+	});
+      })();
+    </script>
+</head>
+<body>
+    <h1>Zynth Examples</h1>
+
+    <div id="list" class="music-buttons">
+
+    </div>
+</body>
+</html>
