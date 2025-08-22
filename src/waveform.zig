@@ -193,7 +193,8 @@ pub const BrownNoise = struct {
    fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
         const self: *BrownNoise = @alignCast(@ptrCast(ptr));
         var tmp = [_]f32 {0} ** 4096;
-        _ = self.white.read(&tmp);
+        std.debug.assert(tmp.len >= frames.len);
+        _ = self.white.read(tmp[0..frames.len]);
         const dt: f32 = @as(f32, @floatFromInt(frames.len)) / Config.SAMPLE_RATE;
         const a: f32 = dt / (self.rc + dt);
         frames[0] = a * tmp[0];

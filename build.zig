@@ -1,5 +1,97 @@
 const std = @import("std");
 
+fn compile_dir_wasm(b: *std.Build,
+    step: *std.Build.Step,
+    opt: std.builtin.OptimizeMode,
+    path: []const u8,
+    enable_target_suffix: bool,
+    prefix_filter_opt: ?[]const u8,
+    zynth: *std.Build.Module,
+    preset: *std.Build.Module) !void {
+    const target = b.resolveTargetQuery(.{
+        .cpu_arch = .wasm32,
+        .cpu_model = .{ .explicit = &std.Target.wasm.cpu.mvp },
+        .cpu_features_add = std.Target.wasm.featureSet(&.{
+            .atomics,
+            .bulk_memory,
+        }),
+        .os_tag = .emscripten,
+    });
+
+    var dir = b.path(path).getPath3(b, null).openDir(".", .{.iterate = true }) catch unreachable;
+    defer dir.close();
+    var it = dir.iterate();
+    var first = true;
+    var wasm_manifest = std.io.Writer.Allocating.init(b.allocator);
+    try wasm_manifest.writer.writeByte('[');
+    while (it.next() catch unreachable) |file| {
+        if (file.kind != .file) continue;
+        std.debug.assert(std.mem.eql(u8, std.fs.path.extension(file.name), ".zig"));
+        if (prefix_filter_opt) |prefix_filter| {
+            if (!std.mem.startsWith(u8, file.name, prefix_filter)) continue;
+        }
+        const stripped = file.name[0..file.name.len-4];
+        const exe_name = if (!enable_target_suffix) stripped else b.fmt("{s}-{s}-{s}-{s}", 
+            .{stripped, @tagName(target.result.cpu.arch), @tagName(target.result.abi), @tagName(target.result.os.tag)});
+
+        const mod = b.addModule(file.name, .{
+            .root_source_file = b.path(b.fmt("{s}/{s}", .{path, file.name})),
+            .target = target,
+            .optimize = opt,
+        });
+        mod.addImport("zynth", zynth);
+        mod.addImport("preset", preset);
+
+        const wasm_module = b.addLibrary(.{
+            .linkage = .static,
+            .root_module = mod,
+            .name = exe_name
+        });
+        wasm_module.linkLibC();
+        // wasm.addIncludePath(.{ .cwd_relative = cache_include });
+        wasm_module.entry = .disabled; // for some reason it still export main in the std/start.zig ?? and this does not help anything
+        wasm_module.rdynamic = true;
+        wasm_module.bundle_ubsan_rt = false;
+        wasm_module.bundle_compiler_rt = false;
+
+        //
+        // run emcc on the static lib, and install the generated *.mjs and *.wasm
+        //
+        const arti = b.addInstallArtifact(wasm_module, .{});
+        // step.dependOn(&arti.step);
+        const emcc = b.addSystemCommand(&.{"emcc", "-sMODULARIZE=1", "-sEXPORT_ES6=1", "-sEXPORT_NAME=Foo"});
+        emcc.addArtifactArg(wasm_module);
+        emcc.addArg("-o");
+        const wasm = emcc.addOutputFileArg(b.fmt("{s}.mjs", .{exe_name}));
+
+        const install_wasm = b.addInstallDirectory(.{
+            .source_dir = wasm.dirname(),
+            .install_dir = .{ .custom = "web" },
+            .install_subdir = ".",
+        });
+
+        install_wasm.step.dependOn(&arti.step);
+        emcc.step.dependOn(&arti.step);
+        step.dependOn(&emcc.step);
+        step.dependOn(&install_wasm.step);
+
+        // also put index html into the zig-out/web/
+        const install_index = b.addInstallFile(b.path("web/index.html"), "web/index.html");
+        step.dependOn(&install_index.step);
+
+        if (first) try wasm_manifest.writer.print("\"{s}\"", .{exe_name})
+        else try wasm_manifest.writer.print(", \"{s}\"", .{exe_name});
+
+        first = false;
+    }
+    try wasm_manifest.writer.writeByte(']');
+    const wf = b.addWriteFiles();
+    const manifest_path = wf.add("manifest", try wasm_manifest.toOwnedSlice());
+    const install_manifest = b.addInstallFile(manifest_path, "web/manifest.json");
+    step.dependOn(&install_manifest.step);
+
+}
+
 fn compile_dir(
     b: *std.Build,
     step: *std.Build.Step,
@@ -9,7 +101,9 @@ fn compile_dir(
     enable_target_suffix: bool,
     prefix_filter_opt: ?[]const u8,
     zynth: *std.Build.Module,
-    preset: *std.Build.Module) void {
+    preset: *std.Build.Module) !void {
+
+    if (target.result.cpu.arch.isWasm()) return compile_dir_wasm(b, step, opt, path, enable_target_suffix, prefix_filter_opt, zynth, preset);
     var dir = b.path(path).getPath3(b, null).openDir(".", .{.iterate = true }) catch unreachable;
     defer dir.close();
     var it = dir.iterate();
@@ -23,67 +117,23 @@ fn compile_dir(
         const exe_name = if (!enable_target_suffix) stripped else b.fmt("{s}-{s}-{s}-{s}", 
             .{stripped, @tagName(target.result.cpu.arch), @tagName(target.result.abi), @tagName(target.result.os.tag)});
 
-        const wasm_target = b.resolveTargetQuery(.{
-            .cpu_arch = .wasm32,
-            .cpu_model = .{ .explicit = &std.Target.wasm.cpu.mvp },
-            .cpu_features_add = std.Target.wasm.featureSet(&.{
-                .atomics,
-                .bulk_memory,
-            }),
-            .os_tag = .emscripten,
-        });
-
-        const mod = b.addModule(file.name, .{
+         const mod = b.addModule(file.name, .{
             .root_source_file = b.path(b.fmt("{s}/{s}", .{path, file.name})),
-            .target = if (target.result.cpu.arch.isWasm()) wasm_target else target,
+            .target = target,
             .optimize = opt,
         });
         mod.addImport("zynth", zynth);
         mod.addImport("preset", preset);
 
 
-        if (!target.result.cpu.arch.isWasm()) {
-            const exe = b.addExecutable(
-                .{
-                    .root_module = mod,
-                    .name = exe_name,
-                }
-            );
-            const arti = b.addInstallArtifact(exe, .{});
-            step.dependOn(&arti.step);
-
-        } else {
-            const wasm_module = b.addLibrary(.{
-                .linkage = .static,
+        const exe = b.addExecutable(
+            .{
                 .root_module = mod,
-                .name = exe_name
-           });
-            wasm_module.linkLibC();
-            // wasm.addIncludePath(.{ .cwd_relative = cache_include });
-            wasm_module.entry = .disabled; // for some reason it still export main in the std/start.zig ?? and this does not help anything
-            wasm_module.rdynamic = true;
-            wasm_module.bundle_ubsan_rt = false;
-            wasm_module.bundle_compiler_rt = false;
-
-
-            const arti = b.addInstallArtifact(wasm_module, .{});
-            // step.dependOn(&arti.step);
-            const emcc = b.addSystemCommand(&.{"emcc", "-sMODULARIZE=1", "-sEXPORT_ES6=1"});
-            emcc.addArtifactArg(wasm_module);
-            emcc.addArg("-o");
-            const wasm = emcc.addOutputFileArg(b.fmt("{s}.mjs", .{exe_name}));
-
-            const install_wasm = b.addInstallDirectory(.{
-                .source_dir = wasm.dirname(),
-                .install_dir = .{ .custom = "web" },
-                .install_subdir = ".",
-            });
-
-            install_wasm.step.dependOn(&arti.step);
-            emcc.step.dependOn(&arti.step);
-            step.dependOn(&emcc.step);
-            step.dependOn(&install_wasm.step);
-        }
+                .name = exe_name,
+            }
+        );
+        const arti = b.addInstallArtifact(exe, .{});
+        step.dependOn(&arti.step);
     }
 }
 
@@ -156,8 +206,8 @@ pub fn build(b: *std.Build) !void {
 
     const example_step = b.step("examples", "build and install the examples");
 
-    compile_dir(b, example_step, target, opt, "src/examples", enable_target_suffix, prefix_filter_opt, zynth, preset);
-    if (enable_gui) compile_dir(b, example_step, target, opt, "src/examples/gui", enable_target_suffix, prefix_filter_opt, zynth, preset);
+    try compile_dir(b, example_step, target, opt, "src/examples", enable_target_suffix, prefix_filter_opt, zynth, preset);
+    if (enable_gui) try compile_dir(b, example_step, target, opt, "src/examples/gui", enable_target_suffix, prefix_filter_opt, zynth, preset);
 
 
     //     const wasm_target = b.resolveTargetQuery(.{.cpu_arch = .wasm32, .os_tag = .emscripten});
