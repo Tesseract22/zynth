@@ -59,7 +59,7 @@ fn compile_dir_wasm(b: *std.Build,
         //
         const arti = b.addInstallArtifact(wasm_module, .{});
         // step.dependOn(&arti.step);
-        const emcc = b.addSystemCommand(&.{"emcc", "-sMODULARIZE=1", "-sEXPORT_ES6=1", "-sEXPORT_NAME=Foo"});
+        const emcc = b.addSystemCommand(&.{"emcc", "-sMODULARIZE=1", "-sEXPORT_ES6=1", "-Oz"});
         emcc.addArtifactArg(wasm_module);
         emcc.addArg("-o");
         const wasm = emcc.addOutputFileArg(b.fmt("{s}.mjs", .{exe_name}));
@@ -75,10 +75,7 @@ fn compile_dir_wasm(b: *std.Build,
         step.dependOn(&emcc.step);
         step.dependOn(&install_wasm.step);
 
-        // also put index html into the zig-out/web/
-        const install_index = b.addInstallFile(b.path("web/index.html"), "web/index.html");
-        step.dependOn(&install_index.step);
-
+        
         if (first) try wasm_manifest.writer.print("\"{s}\"", .{exe_name})
         else try wasm_manifest.writer.print(", \"{s}\"", .{exe_name});
 
@@ -89,6 +86,13 @@ fn compile_dir_wasm(b: *std.Build,
     const manifest_path = wf.add("manifest", try wasm_manifest.toOwnedSlice());
     const install_manifest = b.addInstallFile(manifest_path, "web/manifest.json");
     step.dependOn(&install_manifest.step);
+
+    // also put index html into the zig-out/web/
+    const install_index = b.addInstallFile(b.path("web/index.html"), "web/index.html");
+    step.dependOn(&install_index.step);
+    const install_ico = b.addInstallFile(b.path("web/favicon.ico"), "web/favicon.ico");
+    step.dependOn(&install_ico.step);
+
 
 }
 
@@ -117,7 +121,7 @@ fn compile_dir(
         const exe_name = if (!enable_target_suffix) stripped else b.fmt("{s}-{s}-{s}-{s}", 
             .{stripped, @tagName(target.result.cpu.arch), @tagName(target.result.abi), @tagName(target.result.os.tag)});
 
-         const mod = b.addModule(file.name, .{
+        const mod = b.addModule(file.name, .{
             .root_source_file = b.path(b.fmt("{s}/{s}", .{path, file.name})),
             .target = target,
             .optimize = opt,
