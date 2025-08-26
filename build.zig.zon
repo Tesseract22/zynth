@@ -36,9 +36,10 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
-        .zemscripten = .{
-            .url = "git+https://github.com/zig-gamedev/zemscripten.git#97eb64f422a110a813f298585acbfb604f7fe08c",
-            .hash = "zemscripten-0.2.0-dev-sRlDqLZNAABqYJZMdZSczedrT29D5Wu2t5kLci0yd9uU",
+        .raylib = .{
+            .lazy = true,
+            .url = "git+https://github.com/raysan5/raylib.git#99c4d4b59783c32031121b52d39d7b84c9202050",
+            .hash = "raylib-5.5.0-whq8uC1MxwRdqnkws5OXq1SnqWt8P72-ch8b27NwXFI3",
         },
     },
     .paths = .{
