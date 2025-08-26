@@ -15,7 +15,7 @@ pub fn create(a: std.mem.Allocator, val: anytype) *@TypeOf(val) {
 fn loop() callconv(.c) void {}
 pub fn wait_for_input() void {
     if (builtin.target.os.tag == .emscripten) {
-        const zemscripten = @import("zemscripten");
+        const zemscripten = @import("zemscripten.zig");
         zemscripten.setMainLoop(loop, null, true);
     } else {
         var stdin = std.fs.File.stdin();
@@ -77,7 +77,7 @@ pub const SimpleAudioCtx = struct {
 
     pub fn drain(self: *SimpleAudioCtx) void {
         if (builtin.target.os.tag == .emscripten) {
-            const zemscripten = @import("zemscripten");
+            const zemscripten = @import("zemscripten.zig");
             zemscripten.setMainLoop(loop, null, true);
         } else {
             std.debug.assert(c.ma_event_wait(&self.stop_event) == c.MA_SUCCESS);
