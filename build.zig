@@ -59,7 +59,7 @@ pub fn compile_to_wasm(
 
     // const arti = b.addInstallArtifact(wasm_module, .{});
     // step.dependOn(&arti.step);
-    const emcc = b.addSystemCommand(&.{"emcc", "-sMODULARIZE=1", "-sEXPORT_ES6=1", "-Oz"});
+    const emcc = b.addSystemCommand(&.{"emcc", "-g", "-sEXPORTED_FUNCTIONS=_main", "-sEXPORTED_RUNTIME_METHODS=callMain,FS", "-sMODULARIZE=1", "-sEXPORT_ES6=1", "-O0"});
     emcc.addArtifactArg(wasm_module);
     emcc.addArg("-o");
     const wasm = emcc.addOutputFileArg(b.fmt("{s}.mjs", .{mod_name}));
@@ -71,7 +71,7 @@ pub fn compile_to_wasm(
     });
 
     install_wasm.step.dependOn(&emcc.step);
-    return &emcc.step;
+    return &install_wasm.step;
 
 }
 
@@ -113,7 +113,7 @@ fn compile_dir_wasm(b: *Build,
         mod.addImport("zynth", zynth);
         mod.addImport("preset", preset);
 
-        const wasm_step = compile_to_wasm(b, mod, file.name); 
+        const wasm_step = compile_to_wasm(b, mod, exe_name); 
         step.dependOn(wasm_step);
 
         if (first) try wasm_manifest.writer.print("\"{s}\"", .{exe_name})
