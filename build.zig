@@ -39,6 +39,7 @@ pub fn create_wasm_mod(
 
 pub fn compile_to_wasm(
     b: *Build,
+    optimize: std.builtin.OptimizeMode,
     module: *Build.Module,
     mod_name: []const u8) *Build.Step {
 
@@ -59,7 +60,20 @@ pub fn compile_to_wasm(
 
     // const arti = b.addInstallArtifact(wasm_module, .{});
     // step.dependOn(&arti.step);
-    const emcc = b.addSystemCommand(&.{"emcc", "-g", "-sEXPORTED_FUNCTIONS=_main", "-sEXPORTED_RUNTIME_METHODS=callMain,FS", "-sMODULARIZE=1", "-sEXPORT_ES6=1", "-O0"});
+    const emcc_opt = switch (optimize) {
+        .Debug => "-O0",
+        .ReleaseSmall => "-Oz",
+        .ReleaseFast => "-O3",
+        .ReleaseSafe => "-O0",
+    };
+    const emcc = b.addSystemCommand(&.{"emcc",
+        "-sEXPORTED_FUNCTIONS=_main", "-sEXPORTED_RUNTIME_METHODS=callMain,FS", 
+        "-sMODULARIZE=1", "-sEXPORT_ES6=1",
+        "-sALLOW_MEMORY_GROWTH",
+        "-sEXIT_RUNTIME",
+        emcc_opt
+    });
+    if (optimize == .Debug or optimize == .ReleaseSafe) emcc.addArg("-g");
     emcc.addArtifactArg(wasm_module);
     emcc.addArg("-o");
     const wasm = emcc.addOutputFileArg(b.fmt("{s}.mjs", .{mod_name}));
@@ -113,7 +127,7 @@ fn compile_dir_wasm(b: *Build,
         mod.addImport("zynth", zynth);
         mod.addImport("preset", preset);
 
-        const wasm_step = compile_to_wasm(b, mod, exe_name); 
+        const wasm_step = compile_to_wasm(b, opt, mod, exe_name); 
         step.dependOn(wasm_step);
 
         if (first) try wasm_manifest.writer.print("\"{s}\"", .{exe_name})

@@ -3,6 +3,7 @@ const Streamer = @import("streamer.zig");
 const Config = @import("config.zig");
 const std = @import("std");
 const builtin = @import("builtin");
+const zemscripten = @import("zemscripten.zig");
 
 const AudioCallBack = fn (pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const anyopaque, frameCount: u32) callconv(.c) void;
 
@@ -15,7 +16,6 @@ pub fn create(a: std.mem.Allocator, val: anytype) *@TypeOf(val) {
 fn loop() callconv(.c) void {}
 pub fn wait_for_input() void {
     if (builtin.target.os.tag == .emscripten) {
-        const zemscripten = @import("zemscripten.zig");
         zemscripten.setMainLoop(loop, null, true);
     } else {
         var stdin = std.fs.File.stdin();
@@ -25,12 +25,23 @@ pub fn wait_for_input() void {
     }
 }
 
+extern fn emscripten_exit_with_live_runtime(status: c_int) void;
+extern fn emscripten_force_exit(status: c_int) void;
+
 pub fn read_frames(pDevice: [*c]c.ma_device, pOutput: ?*anyopaque, pInput: ?*const anyopaque, frameCount: u32) callconv(.c) void {
     _ = pInput;
     const ctx: *SimpleAudioCtx = @alignCast(@ptrCast(pDevice[0].pUserData));
     const float_out: [*]f32 = @alignCast(@ptrCast(pOutput));
     _, const status = ctx.streamer.read(float_out[0..frameCount]);
-    if (status == .Stop) std.debug.assert(c.ma_event_signal(&ctx.stop_event) == c.MA_SUCCESS);
+    if (status == .Stop) {
+        if (builtin.target.os.tag == .emscripten)
+            ctx.deinit()
+            // emscripten_force_exit(0);
+            // emscripten_exit_with_live_runtime(0)
+            // std.process.exit(0)
+        else
+            std.debug.assert(c.ma_event_signal(&ctx.stop_event) == c.MA_SUCCESS);
+    }
 }
 
 pub fn init_device_config(callback: *const AudioCallBack, ctx: *SimpleAudioCtx) c.ma_device_config {
@@ -77,7 +88,6 @@ pub const SimpleAudioCtx = struct {
 
     pub fn drain(self: *SimpleAudioCtx) void {
         if (builtin.target.os.tag == .emscripten) {
-            const zemscripten = @import("zemscripten.zig");
             zemscripten.setMainLoop(loop, null, true);
         } else {
             std.debug.assert(c.ma_event_wait(&self.stop_event) == c.MA_SUCCESS);

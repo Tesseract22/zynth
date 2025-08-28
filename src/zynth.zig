@@ -42,6 +42,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 // use this overwrite options in case of emscripten
-pub const std_options = if (builtin.target.os.tag == .emscripten) std.Options {
+pub const std_options: std.Options = if (builtin.target.os.tag == .emscripten) .{
     .logFn = @import("zemscripten.zig").log,
 } else .{};
