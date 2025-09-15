@@ -99,7 +99,7 @@ pub const FreqEnvelop = struct {
     time: f64, // time in secs, different from the `time` above
     wave_time: f64,
     amplitude: f32,
-    le: Envelop.LinearEnvelop(f64, f64),
+    le: Envelop.LinearEnvelop(f64, f64, .dynamic),
     shape: Shape,
 
     fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
@@ -135,7 +135,7 @@ pub const FreqEnvelop = struct {
         };
     }
 
-    pub fn init(amp: f32, freq_le: Envelop.LinearEnvelop(f64, f64), shape: Shape) FreqEnvelop {
+    pub fn init(amp: f32, freq_le: Envelop.LinearEnvelop(f64, f64, .dynamic), shape: Shape) FreqEnvelop {
         return .{
             .time = 0,
             .wave_time = 0,

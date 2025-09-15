@@ -1,3 +1,4 @@
+const std = @import("std");
 const Streamer = @This();
 
 pub const Status = enum(u8) {
@@ -38,16 +39,12 @@ pub fn make(comptime T: type, val: *T) Streamer {
     if (!@hasDecl(T, "read")) {
         @compileError(@typeName(T) ++ " does not have method `play`");
     }
-    // const play_type = @typeInfo(@FieldType(T, "play"));
-    // if (play_type != .@"fn") {
-    //     @compileError("field `play` needs to be a function");
-    // }
     
     const wrapper = struct {
         pub fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
             const unwrapped: *T = @ptrCast(@alignCast(ptr));
             return unwrapped.read(frames);
-        }
+}
 
         pub fn reset(ptr: *anyopaque) bool {
             if (@hasDecl(T, "reset")) {

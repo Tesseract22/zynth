@@ -3,13 +3,27 @@ const Streamer = @import("streamer.zig");
 const Config = @import("config.zig");
 const lerp = std.math.lerp;
 
-pub fn LinearEnvelop(comptime DuraT: type, comptime ValT: type) type{
+pub const EnvelopStorage = union(enum) {
+    static: comptime_int,
+    dynamic,
+};
+
+pub fn LinearEnvelop(comptime DuraT: type, comptime ValT: type, comptime storage: EnvelopStorage) type{
     return struct {
         const Self = @This();
-        durations: []const DuraT,
-        heights: []const ValT,
+        pub const DurasT = switch (storage) {
+            .static => |N| [N-1]DuraT,
+            .dynamic => []const DuraT,
+        };
+        pub const ValsT = switch (storage) {
+            .static => |N| [N]ValT,
+            .dynamic => []const ValT,
+        };
 
-        pub fn init(durations: []const DuraT, heights: []const ValT) Self {
+        durations: DurasT,
+        heights: ValsT,
+
+        pub fn init(durations: DurasT, heights: ValsT) Self {
             std.debug.assert(durations.len > 0);
             std.debug.assert(durations.len == heights.len - 1);
             return .{ .durations = durations, .heights = heights };
@@ -66,51 +80,53 @@ pub const SimpleCutoff = struct {
     }   
 };
 
-pub const Envelop = struct {
-    le: LinearEnvelop(f32, f32),
-    t: f32,
-    sub_stream: Streamer,
+pub fn Envelop(comptime storage: EnvelopStorage) type {
+    return struct {
+        const Self = @This();
+        pub const LinearEnvelopT = LinearEnvelop(f32, f32, storage);
+        le: LinearEnvelopT,
+        t: f32,
+        sub_stream: Streamer,
 
-
-
-    pub fn init(durations: []const f32, heights: []const f32, sub_stream: Streamer) Envelop {
-        return .{ .le = LinearEnvelop(f32, f32).init(durations, heights), .t = 0, .sub_stream = sub_stream };
-    }
-
-    fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
-        const self: *Envelop = @alignCast(@ptrCast(ptr));
-        const len, const sub_status = self.sub_stream.read(frames);
-        const advance = 1.0/@as(comptime_float, @floatFromInt(Config.SAMPLE_RATE));
-        for (0..frames.len) |i| {
-            self.t += advance;
-            const mul, const status = self.le.get(self.t);
-            frames[i] *= mul;
-            if (status == .Stop) {
-                @memset(frames[i..], 0);
-                return .{ @intCast(i), .Stop };
-            }
-        } else {
-            return .{ len, sub_status };
+        pub fn init(durations: LinearEnvelopT.DurasT, heights: LinearEnvelopT.ValsT, sub_stream: Streamer) Self {
+            return .{ .le = LinearEnvelop(f32, f32, storage).init(durations, heights), .t = 0, .sub_stream = sub_stream };
         }
-    }
 
-    pub fn streamer(self: *Envelop) Streamer {
-        return .{
-            .ptr = @ptrCast(self),
-            .vtable = .{
-                .read = read,
-                .reset = reset,
-            },
-        };
-    }
+        fn read(ptr: *anyopaque, frames: []f32) struct { u32, Streamer.Status } {
+            const self: *Self = @alignCast(@ptrCast(ptr));
+            const len, const sub_status = self.sub_stream.read(frames);
+            const advance = 1.0/@as(comptime_float, @floatFromInt(Config.SAMPLE_RATE));
+            for (0..frames.len) |i| {
+                self.t += advance;
+                const mul, const status = self.le.get(self.t);
+                frames[i] *= mul;
+                if (status == .Stop) {
+                    @memset(frames[i..], 0);
+                    return .{ @intCast(i), .Stop };
+                }
+            } else {
+                return .{ len, sub_status };
+            }
+        }
 
-    fn reset(ptr: *anyopaque) bool {
-        const self: *Envelop = @alignCast(@ptrCast(ptr));
-        self.t = 0;
-        return self.sub_stream.reset();
-    }
+        pub fn streamer(self: *Self) Streamer {
+            return .{
+                .ptr = @ptrCast(self),
+                .vtable = .{
+                    .read = read,
+                    .reset = reset,
+                },
+            };
+        }
 
-};
+        fn reset(ptr: *anyopaque) bool {
+            const self: *Self = @alignCast(@ptrCast(ptr));
+            self.t = 0;
+            return self.sub_stream.reset();
+        }
+
+    };
+}
 
 pub const LiveEnvelop = struct {
     attack: f64,
