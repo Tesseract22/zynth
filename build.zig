@@ -41,7 +41,7 @@ pub fn compile_to_wasm(
     b: *Build,
     optimize: std.builtin.OptimizeMode,
     module: *Build.Module,
-    mod_name: []const u8) *Build.Step {
+    mod_name: []const u8, stack_size: ?u64) *Build.Step {
 
     // This create an archive that contains a .o file. This .o file is NOT an ELF.
     // Instead, it is a wasm binary module.
@@ -62,7 +62,7 @@ pub fn compile_to_wasm(
     // step.dependOn(&arti.step);
     const emcc_opt = switch (optimize) {
         .Debug => "-O0",
-        .ReleaseSmall => "-Oz",
+        .ReleaseSmall => "-O0",
         .ReleaseFast => "-O3",
         .ReleaseSafe => "-O0",
     };
@@ -73,7 +73,9 @@ pub fn compile_to_wasm(
         "-sEXIT_RUNTIME",
         emcc_opt
     });
-    if (optimize == .Debug or optimize == .ReleaseSafe) emcc.addArg("-g");
+    if (stack_size) |size| 
+        emcc.addArg(b.fmt("-sSTACK_SIZE={}", .{size}));
+    if (optimize == .Debug or optimize == .ReleaseSmall) emcc.addArg("-g");
     emcc.addArtifactArg(wasm_module);
     emcc.addArg("-o");
     const wasm = emcc.addOutputFileArg(b.fmt("{s}.mjs", .{mod_name}));
@@ -111,7 +113,7 @@ fn compile_dir_wasm(b: *Build,
     defer dir.close();
     var it = dir.iterate();
     var first = true;
-    var wasm_manifest = std.io.Writer.Allocating.init(b.allocator);
+    var wasm_manifest = std.Io.Writer.Allocating.init(b.allocator);
     try wasm_manifest.writer.writeByte('[');
     while (it.next() catch unreachable) |file| {
         if (file.kind != .file) continue;
@@ -127,7 +129,7 @@ fn compile_dir_wasm(b: *Build,
         mod.addImport("zynth", zynth);
         mod.addImport("preset", preset);
 
-        const wasm_step = compile_to_wasm(b, opt, mod, exe_name); 
+        const wasm_step = compile_to_wasm(b, opt, mod, exe_name, null); 
         step.dependOn(wasm_step);
 
         if (first) try wasm_manifest.writer.print("\"{s}\"", .{exe_name})
