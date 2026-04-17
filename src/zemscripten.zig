@@ -1,5 +1,5 @@
 //! Zig bindings and glue for Emscripten
-// This file is copy from https://github.com/zig-gamedev/zemscripten/blob/main/src/zemscripten.zig
+// This file is copied from https://github.com/zig-gamedev/zemscripten/blob/main/src/zemscripten.zig
 const std = @import("std");
 
 comptime {
